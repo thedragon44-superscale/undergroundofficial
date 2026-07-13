@@ -447,7 +447,7 @@
                               /^192\.168\./.test(window.location.hostname) || 
                               /^10\./.test(window.location.hostname);
 
-        const wsHost = isLocalNetwork ? "ws://" + window.location.hostname + ":5001" : "wss://streetbook-mesh.onrender.com";
+        const wsHost = isLocalNetwork ? "ws://" + window.location.hostname + ":5001" : "wss://undergroundofficial-mesh.onrender.com";
         let socket = new WebSocket(wsHost);
         let decryptedHistory = [];
         let networkUsersDirectory = [];
