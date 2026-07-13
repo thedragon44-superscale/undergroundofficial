@@ -1,0 +1,15 @@
+# Security
+.env
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# User Uploads (so you don't overwrite live avatars when pushing code)
+static/uploads/
