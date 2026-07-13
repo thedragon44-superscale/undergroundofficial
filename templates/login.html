@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>StreetBook - {{ title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body { 
+            margin: 0; 
+            padding: 0;
+            font-family: 'Inter', sans-serif; 
+            background: #0b1120 url('https://images.unsplash.com/photo-1519608487953-e999c86e7455?q=80&w=1200&auto=format&fit=crop') no-repeat center center fixed; 
+            background-size: cover; 
+            height: 100dvh; /* Dynamic viewport height locks to screen edge */
+            width: 100vw;
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            overflow: hidden; /* Strictly kills all scrollbars */
+        }
+        
+        body::before { 
+            content: ""; 
+            position: absolute; 
+            inset: 0; 
+            background: rgba(4, 6, 10, 0.75); 
+            z-index: 0; 
+        }
+        
+        .auth-box { 
+            position: relative; 
+            z-index: 10; 
+            background: transparent; 
+            border: none; 
+            box-shadow: none; 
+            width: 90%; 
+            max-width: 420px; 
+            height: 100%;
+            max-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center; 
+            color: #f8fafc; 
+            padding: 2vh 0;
+            box-sizing: border-box;
+        }
+        
+        .logo { 
+            /* Scales dynamically with screen height to prevent scrolling, maxing out at massive 260px */
+            height: 30vh; 
+            min-height: 120px;
+            max-height: 260px;
+            width: auto; 
+            max-width: 100%;
+            object-fit: contain;
+            margin-bottom: 2vh; 
+            filter: drop-shadow(0 10px 25px rgba(0,0,0,0.8)) drop-shadow(0 0 25px rgba(56,189,248,0.4)); 
+        }
+
+        h2 {
+            margin: 0 0 3vh 0; 
+            font-size: clamp(1.2rem, 3vh, 1.5rem);
+            letter-spacing: 0.05em; 
+            text-transform: uppercase;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.9); 
+        }
+        
+        form {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 2vh; /* Dynamically spaces inputs based on available screen height */
+        }
+
+        .input-group { 
+            position: relative; 
+            text-align: left; 
+            width: 100%;
+        }
+        
+        .input-group input { 
+            width: 100%; 
+            padding: clamp(10px, 2vh, 14px) 16px; 
+            border-radius: 8px; 
+            border: 1px solid rgba(255,255,255,0.15); 
+            background: rgba(0, 0, 0, 0.5); 
+            backdrop-filter: blur(10px); 
+            color: white; 
+            box-sizing: border-box; 
+            outline: none; 
+            font-size: 0.95rem; 
+            transition: all 0.2s; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        
+        .input-group input:focus { 
+            border-color: #38bdf8; 
+            background: rgba(0, 0, 0, 0.7);
+        }
+        
+        .pwd-toggle { 
+            position: absolute; 
+            right: 12px; 
+            top: 50%; 
+            transform: translateY(-50%); 
+            cursor: pointer; 
+            color: #94a3b8; 
+            font-size: 1.1rem; 
+            user-select: none; 
+            transition: color 0.2s;
+        }
+        
+        .pwd-toggle:hover { color: #f8fafc; }
+        
+        .btn { 
+            width: 100%; 
+            padding: clamp(12px, 2.5vh, 16px); 
+            border-radius: 8px; 
+            background: #38bdf8; 
+            color: #042f40; 
+            border: none; 
+            font-weight: 700; 
+            font-size: 1rem; 
+            cursor: pointer; 
+            transition: background 0.2s; 
+            box-shadow: 0 8px 25px rgba(0,0,0,0.6), 0 0 15px rgba(56,189,248,0.3); 
+            margin-top: 1vh; 
+        }
+        
+        .btn:hover { background: #0ea5e9; color: white; }
+        
+        .flash { 
+            padding: 10px; 
+            border-radius: 8px; 
+            margin-bottom: 2vh; 
+            font-size: 0.85rem; 
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .flash.error { background: rgba(248,113,113,0.2); border: 1px solid rgba(248,113,113,0.4); color: #fca5a5; }
+        .flash.success { background: rgba(16,185,129,0.2); border: 1px solid rgba(16,185,129,0.4); color: #6ee7b7; }
+        
+        .toggle-link { 
+            margin-top: 3vh; 
+            font-size: 0.9rem; 
+            color: #cbd5e1; 
+            text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+        }
+        .toggle-link a { color: #38bdf8; text-decoration: none; font-weight: 600; cursor: pointer; transition: color 0.2s; }
+        .toggle-link a:hover { color: #f8fafc; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="auth-box">
+        <img src="/static/streetbook_logo.png" alt="Logo" class="logo" onerror="this.style.display='none'">
+        <h2>{{ title }}</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('register' if title == 'Register' else 'login') }}">
+            {% if title == 'Register' %}
+            <div class="input-group">
+                <input type="text" name="invite_key" placeholder="Invite Key (e.g. METRO-...)" required autocomplete="off">
+            </div>
+            {% endif %}
+            
+            <div class="input-group">
+                <input type="text" name="username" placeholder="Operator Handle" required autocomplete="off">
+            </div>
+            
+            <div class="input-group">
+                <input type="password" name="password" id="pwdInput" placeholder="Passphrase" required>
+                <span class="pwd-toggle" id="toggleBtn" onclick="togglePassword()">👁️</span>
+            </div>
+            
+            <button type="submit" class="btn">{{ 'Establish Node' if title == 'Register' else 'Authenticate' }}</button>
+        </form>
+
+        <div class="toggle-link">
+            {% if title == 'Login' %}
+                No clearance? <a href="{{ url_for('register') }}">Use Invite Key</a>
+            {% else %}
+                Already registered? <a href="{{ url_for('login') }}">Login</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function togglePassword() {
+            const input = document.getElementById('pwdInput');
+            const btn = document.getElementById('toggleBtn');
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.innerText = '🙈';
+            } else {
+                input.type = 'password';
+                btn.innerText = '👁️';
+            }
+        }
+    </script>
+</body>
+</html>

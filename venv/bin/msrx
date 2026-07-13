@@ -1,0 +1,6 @@
+#!/media/foolio/beans/spudrmn/venv/bin/python3
+
+import msrx
+
+if __name__ == '__main__':
+  msrx.main()

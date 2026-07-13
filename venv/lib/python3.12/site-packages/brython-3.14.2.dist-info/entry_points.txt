@@ -1,0 +1,2 @@
+[console_scripts]
+brython-cli = brython.__main__:main

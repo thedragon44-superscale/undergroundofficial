@@ -1,0 +1,22 @@
+Metadata-Version: 2.1
+Name: iw
+Version: 1.0.0
+Summary: Insightful information from insightworkshop.io
+Home-page: https://github.com/shrawanx/iw
+Author: Insight Workshop
+Author-email: shrawan@insightworkshop.io
+License: MIT
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Description-Content-Type: text/markdown
+
+# iw
+
+iw is a package to provide insightful information of insightworkshop.io on the Python environment
+
+# Hello World!
+```python
+import iw
+print(iw.academy)
+```
+
