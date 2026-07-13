@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>StreetBook - {{ title }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<link rel="manifest" href="/static/manifest.json">
+    <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0b1120">
     <link rel="apple-touch-icon" href="/static/sb.png">
     <style>
@@ -16,12 +16,12 @@
             font-family: 'Inter', sans-serif; 
             background: #0b1120 url('https://images.unsplash.com/photo-1519608487953-e999c86e7455?q=80&w=1200&auto=format&fit=crop') no-repeat center center fixed; 
             background-size: cover; 
-            height: 100dvh; /* Dynamic viewport height locks to screen edge */
+            height: 100dvh; 
             width: 100vw;
             display: flex; 
             justify-content: center; 
             align-items: center; 
-            overflow: hidden; /* Strictly kills all scrollbars */
+            overflow: hidden; 
         }
         
         body::before { 
@@ -53,7 +53,6 @@
         }
         
         .logo { 
-            /* Scales dynamically with screen height to prevent scrolling, maxing out at massive 260px */
             height: 30vh; 
             min-height: 120px;
             max-height: 260px;
@@ -76,7 +75,7 @@
             width: 100%;
             display: flex;
             flex-direction: column;
-            gap: 2vh; /* Dynamically spaces inputs based on available screen height */
+            gap: 2vh; 
         }
 
         .input-group { 

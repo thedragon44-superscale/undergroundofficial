@@ -4,372 +4,361 @@
     <meta charset="UTF-8">
     <title>StreetBook Hub</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<link rel="manifest" href="/static/manifest.json">
+    <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0b1120">
     <link rel="apple-touch-icon" href="/static/sb.png">
-    <!-- STRIPE CRYPTO ONRAMP ENGINE -->
+    <script src="https://js.stripe.com/v3/"></script>
     <script src="https://crypto-js.stripe.com/crypto-onramp-outer.js"></script>
     <style>
-        /* --- STREETBOOK GLASSMORPHIC PREMIUM DESIGN --- */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
-
-        body { 
-            margin: 0; 
-            padding: 0; 
-            font-family: 'Inter', -apple-system, sans-serif; 
-            background: #0b1120 url('https://images.unsplash.com/photo-1519608487953-e999c86e7455?q=80&w=1200&auto=format&fit=crop') no-repeat center center fixed; 
-            background-size: cover;
-            height: 100dvh; 
-            width: 100vw;
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            overflow: hidden; 
-            box-sizing: border-box;
-        }
-
-        body::before {
-            content: "";
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(4, 6, 10, 0.4);
-            z-index: 0;
-        }
-
-        .terminal-frame {
-            width: 95%; 
-            max-width: 1100px; 
-            height: 90vh; 
-            max-height: 800px; 
-            position: relative;
-            display: flex;
-            z-index: 10;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body { margin: 0; font-family: 'Inter', sans-serif; background: #0b1120; color: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        * { box-sizing: border-box; }
+        
+        .header { background: #0f172a; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 20; position: relative; }
+        .logo-text { font-size: 1.5rem; font-weight: 700; color: #38bdf8; letter-spacing: 0.05em; text-transform: uppercase; margin-left: 140px; text-shadow: 0 0 15px rgba(56,189,248,0.4); }
+        .user-info { display: flex; align-items: center; gap: 15px; font-size: 0.9rem; }
+        .logout-btn { background: rgba(244, 63, 94, 0.1); color: #f43f5e; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; transition: all 0.2s; border: 1px solid rgba(244, 63, 94, 0.3); }
+        .logout-btn:hover { background: #f43f5e; color: white; box-shadow: 0 0 15px rgba(244, 63, 94, 0.4); }
 
         .detached-logo {
             position: absolute; 
-            top: -55px; 
-            left: -25px; 
-            width: 120px; 
-            height: 120px; 
+            top: -85px; 
+            left: -40px; 
+            width: 210px; 
+            height: 210px; 
             object-fit: contain;
             z-index: 50; 
             filter: drop-shadow(0 15px 25px rgba(0,0,0,0.8)) drop-shadow(0 0 20px rgba(56,189,248,0.3)); 
             pointer-events: none; 
         }
 
-        .dashboard { 
-            width: 100%; 
-            height: 100%; 
-            background: rgba(15, 23, 42, 0.55); 
-            backdrop-filter: blur(25px) saturate(150%); 
-            -webkit-backdrop-filter: blur(25px) saturate(150%);
-            border-radius: 16px; 
-            border: 1px solid rgba(255, 255, 255, 0.12); 
-            box-shadow: 0 30px 60px -12px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.1); 
-            display: flex; 
-            flex-direction: column; 
-            overflow: hidden; 
-            color: #f1f5f9; 
-        }
+        .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }
+        
+        .tab-nav { width: 80px; background: #0f172a; display: flex; flex-direction: column; align-items: center; padding-top: 20px; gap: 20px; border-right: 1px solid #1e293b; z-index: 10; }
+        .tab-btn { width: 50px; height: 50px; border-radius: 12px; background: rgba(30, 41, 59, 0.5); color: #94a3b8; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+        .tab-btn:hover { background: #1e293b; color: #38bdf8; }
+        .tab-btn.active { background: #38bdf8; color: #0f172a; box-shadow: 0 0 20px rgba(56,189,248,0.4); border-color: #7dd3fc; }
 
-        .header { 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            padding: 16px 24px 16px 110px; 
-            background: rgba(15, 23, 42, 0.4); 
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08); 
-            flex-shrink: 0; 
-            position: relative;
-        }
-        .header h2 { margin: 0; font-weight: 600; font-size: 1.05rem; color: #cbd5e1; }
-        .header h2 b { color: #38bdf8; font-family: 'JetBrains Mono', monospace; text-shadow: 0 0 12px rgba(56,189,248,0.3); }
+        .content-area { flex: 1; position: relative; background: #0b1120; overflow: hidden; }
+        .view-panel { display: none; width: 100%; height: 100%; overflow-y: auto; padding: 20px; }
+        .view-panel.active { display: block; }
+        
+        .two-pane-layout { display: flex; height: 100%; width: 100%; padding: 0; overflow: hidden; }
+        .sidebar { width: 320px; background: #0f172a; border-right: 1px solid #1e293b; display: flex; flex-direction: column; z-index: 5; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #1e293b; background: rgba(15, 23, 42, 0.95); }
+        .sidebar-search { width: 100%; background: #1e293b; border: 1px solid #334155; color: white; padding: 10px 15px; border-radius: 8px; outline: none; margin-bottom: 15px; transition: border 0.2s; }
+        .sidebar-search:focus { border-color: #38bdf8; }
+        
+        .mode-toggle { display: flex; background: #1e293b; border-radius: 8px; overflow: hidden; }
+        .mode-btn { flex: 1; padding: 8px; text-align: center; font-size: 0.85rem; font-weight: 600; color: #94a3b8; cursor: pointer; transition: all 0.2s; }
+        .mode-btn.active { background: #38bdf8; color: #0f172a; }
 
-        .nav-tabs { display: flex; background: rgba(0, 0, 0, 0.2); border-bottom: 1px solid rgba(255, 255, 255, 0.05); flex-shrink: 0; padding: 0 12px; gap: 8px; }
-        .tab-btn { 
-            padding: 14px 16px; background: none; border: none; color: #94a3b8; font-weight: 600; cursor: pointer; 
-            font-size: 0.8rem; letter-spacing: 0.03em; outline: none; transition: all 0.2s ease;
-            border-bottom: 3px solid transparent;
-        }
-        .tab-btn:hover { color: #f1f5f9; background: rgba(255,255,255,0.03); }
-        .tab-btn.active { color: #38bdf8; border-bottom: 3px solid #38bdf8; background: rgba(56,189,248,0.05); }
+        .inbox-list { flex: 1; overflow-y: auto; padding: 10px; }
+        .inbox-card { display: flex; align-items: center; padding: 12px 15px; border-radius: 8px; cursor: pointer; transition: all 0.2s; margin-bottom: 5px; background: rgba(30, 41, 59, 0.3); border: 1px solid transparent; }
+        .inbox-card:hover { background: #1e293b; border-color: rgba(56,189,248,0.2); }
+        .inbox-card.active { background: #1e293b; border-left: 4px solid #38bdf8; }
+        .avatar-sm { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 15px; border: 2px solid #334155; }
         
-        .view-panel { flex: 1; display: none; padding: 20px; padding-bottom: 40px; overflow-y: auto; flex-direction: column; gap: 15px; box-sizing: border-box; min-height: 0; background: transparent; }
-        .view-panel.active { display: flex; }
+        .chat-container { flex: 1; display: flex; flex-direction: column; background: #0b1120; position: relative; }
+        .chat-header { padding: 20px; border-bottom: 1px solid #1e293b; background: rgba(15, 23, 42, 0.9); display: flex; justify-content: space-between; align-items: center; z-index: 2; backdrop-filter: blur(10px); }
+        .chat-target-name { font-size: 1.2rem; font-weight: 600; color: #f8fafc; }
         
-        .dm-container { display: flex; height: 100%; width: 100%; overflow: hidden; min-height: 0; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; background: rgba(0,0,0,0.15); box-sizing: border-box; }
-        .dm-sidebar { width: 300px; background: rgba(15, 23, 42, 0.4); border-right: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; padding: 12px; gap: 10px; min-height: 0; flex-shrink: 0; box-sizing: border-box; }
-        .dm-main-view { flex: 1; display: flex; flex-direction: column; background: transparent; min-height: 0; min-width: 0; position: relative; }
-        
-        .search-input { width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0, 0, 0, 0.3); color: white; box-sizing: border-box; font-size: 0.85rem; outline: none; flex-shrink: 0; transition: border-color 0.2s; }
-        .search-input:focus { border-color: #38bdf8; background: rgba(0, 0, 0, 0.4); }
+        .e2ee-badge { display: none; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #10b981; background: rgba(16,185,129,0.1); padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(16,185,129,0.3); text-transform: uppercase; letter-spacing: 0.05em; }
+        .e2ee-badge.active { display: flex; }
+        .e2ee-badge::before { content: ""; width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; }
 
-        .inbox-card { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: all 0.2s; color: #cbd5e1; border: 1px solid transparent; }
-        .inbox-card:hover { background: rgba(255,255,255,0.05); }
-        .inbox-card.active { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); }
-        .avatar-sm { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
-        
-        .chat-area { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding: 20px; min-height: 0; }
-        .msg-row { display: flex; width: 100%; flex-direction: column; }
-        .msg-row.me { align-items: flex-end; }
-        .msg-row.others { align-items: flex-start; }
-        .msg-username { font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; cursor: pointer; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+        .chat-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; }
+        .msg-row { display: flex; flex-direction: column; max-width: 75%; }
+        .msg-row.me { align-self: flex-end; align-items: flex-end; }
+        .msg-row.others { align-self: flex-start; align-items: flex-start; }
+        .msg-username { font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; padding: 0 4px; cursor: pointer; transition: color 0.2s; }
         .msg-username:hover { color: #38bdf8; text-decoration: underline; }
         
-        .bubble { max-width: 75%; padding: 12px 16px; border-radius: 12px; font-size: 0.9rem; line-height: 1.5; word-wrap: break-word; box-shadow: 0 4px 15px rgba(0,0,0,0.2); backdrop-filter: blur(10px); }
-        .msg-row.me .bubble { background: rgba(56, 189, 248, 0.85); color: #042f40; border-bottom-right-radius: 2px; font-weight: 500; border: 1px solid rgba(255,255,255,0.2); }
-        .msg-row.others .bubble { background: rgba(30, 41, 59, 0.7); color: #f1f5f9; border-bottom-left-radius: 2px; border: 1px solid rgba(255,255,255,0.08); }
+        .bubble { padding: 12px 16px; border-radius: 12px; font-size: 0.95rem; line-height: 1.5; word-wrap: break-word; box-shadow: 0 4px 15px rgba(0,0,0,0.2); position: relative; }
+        .msg-row.me .bubble { background: #38bdf8; color: #0f172a; border-bottom-right-radius: 2px; }
+        .msg-row.others .bubble { background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-bottom-left-radius: 2px; }
+        .chat-image { max-width: 100%; border-radius: 8px; margin-top: 5px; cursor: pointer; transition: transform 0.2s; border: 1px solid rgba(255,255,255,0.1); }
+        .chat-image:hover { transform: scale(1.02); }
         
-        .chat-target-header-bar { background: rgba(15, 23, 42, 0.5); padding: 14px 20px; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; color: #f8fafc; }
-        .back-btn { display: none; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 500; flex-shrink: 0; }
+        .footer-input { padding: 20px; background: #0f172a; border-top: 1px solid #1e293b; display: flex; gap: 10px; align-items: center; z-index: 2; position: relative; }
+        .footer-input input[type="text"] { flex: 1; background: #1e293b; border: 1px solid #334155; color: white; padding: 14px 20px; border-radius: 25px; outline: none; font-size: 0.95rem; transition: all 0.2s; }
+        .footer-input input[type="text"]:focus { border-color: #38bdf8; box-shadow: 0 0 15px rgba(56,189,248,0.1); }
         
-        /* THE NEW E2EE LOCK BADGE */
-        .e2ee-badge { display: none; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; margin-left: 10px; font-weight: bold; letter-spacing: 0.05em; text-transform: uppercase; box-shadow: 0 0 8px rgba(16,185,129,0.2); align-items: center; gap: 4px; }
-        .e2ee-badge.active { display: inline-flex; }
+        .action-btn { background: #1e293b; border: 1px solid #334155; color: #cbd5e1; width: 45px; height: 45px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: all 0.2s; font-size: 1.2rem; }
+        .action-btn:hover { background: #334155; color: white; transform: translateY(-2px); }
+        .action-btn.primary { background: #38bdf8; color: #0f172a; border: none; }
+        .action-btn.primary:hover { background: #0ea5e9; box-shadow: 0 4px 15px rgba(56,189,248,0.4); }
 
-        .chat-image, .feed-attached-img { width: 100%; max-width: 100%; max-height: 300px; object-fit: contain; background: rgba(0,0,0,0.4); border-radius: 8px; margin-top: 8px; display: block; border: 1px solid rgba(255,255,255,0.1); cursor: zoom-in; }
-        
-        .inline-invoice-card { background: rgba(6, 78, 59, 0.8); border: 1px solid rgba(16, 185, 129, 0.4); border-left: 4px solid #34d399; border-radius: 8px; padding: 16px; width: 240px; color: #ecfdf5; margin-top: 6px; backdrop-filter: blur(10px); }
-        .invoice-btn { background: #10b981; border: none; color: #ffffff; font-weight: 600; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 12px; font-size: 0.8rem; display: inline-block; transition: background 0.2s; box-shadow: 0 4px 10px rgba(16,185,129,0.3); }
-        .invoice-btn:hover { background: #059669; }
-        
-        .feed-post { display: flex; gap: 16px; background: rgba(30, 41, 59, 0.55); border: 1px solid rgba(255,255,255,0.08); padding: 20px; border-radius: 12px; flex-shrink: 0; flex-direction: column; backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
-        .feed-post-header { display: flex; gap: 16px; align-items: flex-start; }
-        .feed-avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
-        .feed-content-area { flex: 1; min-width: 0; }
-        .feed-user { font-weight: 600; font-size: 0.95rem; color: #38bdf8; margin-bottom: 4px; cursor: pointer; display: inline-block; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+        .panel-btn { background: #1e293b; color: #f8fafc; border: 1px solid #334155; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .panel-btn:hover { background: #334155; border-color: #475569; }
+        .panel-btn.primary { background: #38bdf8; color: #0f172a; border: none; }
+        .panel-btn.primary:hover { background: #0ea5e9; color: white; }
+
+        .panel-input { width: 100%; background: #1e293b; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; outline: none; margin-bottom: 15px; }
+        .panel-input:focus { border-color: #38bdf8; }
+
+        .suggestion-menu { position: absolute; bottom: 100%; left: 0; background: #1e293b; border: 1px solid #334155; border-radius: 8px; width: 250px; max-height: 200px; overflow-y: auto; display: none; flex-direction: column; z-index: 100; box-shadow: 0 -10px 30px rgba(0,0,0,0.5); margin-bottom: 10px; }
+        .suggest-row { padding: 10px 15px; cursor: pointer; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .suggest-row:hover, .suggest-row.selected { background: rgba(56,189,248,0.1); color: #38bdf8; }
+        .mention-link { color: #38bdf8; font-weight: 600; cursor: pointer; background: rgba(56,189,248,0.1); padding: 2px 6px; border-radius: 4px; transition: all 0.2s; }
+        .mention-link:hover { background: #38bdf8; color: #0f172a; }
+
+        .feed-post { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; margin-bottom: 20px; transition: transform 0.2s; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .feed-post-header { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 15px; }
+        .feed-avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #334155; cursor: pointer; }
+        .feed-content-area { flex: 1; }
+        .feed-user { font-weight: 700; color: #38bdf8; cursor: pointer; display: inline-block; margin-bottom: 5px; }
         .feed-user:hover { text-decoration: underline; }
-        .feed-body { font-size: 0.95rem; line-height: 1.5; color: #e2e8f0; }
+        .feed-body { color: #e2e8f0; line-height: 1.6; word-wrap: break-word; font-size: 0.95rem; }
+        .feed-attached-img { max-width: 100%; border-radius: 8px; margin-top: 15px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
         
-        .social-engagement-bar { display: flex; align-items: center; gap: 10px; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; flex-wrap: wrap; }
-        .feedback-chip { background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255,255,255,0.05); padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 0.8rem; color: #94a3b8; font-weight: 600; display: flex; align-items: center; gap: 6px; transition: all 0.2s; backdrop-filter: blur(5px); }
-        .feedback-chip:hover { background: rgba(255,255,255,0.1); color: #f1f5f9; }
+        .social-engagement-bar { display: flex; gap: 15px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px; }
+        .feedback-chip { display: flex; align-items: center; gap: 6px; background: rgba(30, 41, 59, 0.5); padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; color: #94a3b8; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+        .feedback-chip:hover { background: rgba(56,189,248,0.1); color: #38bdf8; border-color: rgba(56,189,248,0.3); }
+        .nested-comment-matrix { margin-top: 15px; padding-left: 20px; border-left: 2px solid #334155; display: none; }
+        .nested-comment-matrix.expanded { display: block; }
+        .comment-node { background: rgba(0,0,0,0.2); padding: 10px 15px; border-radius: 8px; margin-bottom: 8px; font-size: 0.85rem; color: #cbd5e1; }
         
-        .nested-comment-matrix { background: rgba(0, 0, 0, 0.3); border-radius: 8px; padding: 12px; display: none; flex-direction: column; gap: 10px; border: 1px solid rgba(255,255,255,0.05); margin-top: 12px; }
-        .nested-comment-matrix.expanded { display: flex; }
-        .comment-node { font-size: 0.85rem; border-left: 2px solid #38bdf8; padding-left: 12px; color: #cbd5e1; }
-        
-        .footer-input { padding: 16px; background: rgba(15, 23, 42, 0.6); display: flex; gap: 10px; border-top: 1px solid rgba(255,255,255,0.08); align-items: center; flex-shrink: 0; position: relative; }
-        .footer-input input, .panel-input { flex: 1; padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0, 0, 0, 0.4); color: white; font-size: 0.9rem; outline: none; transition: border 0.2s; min-width: 0; }
-        .footer-input button, .panel-btn { padding: 10px 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.1); color: white; font-weight: 600; cursor: pointer; font-size: 0.85rem; transition: background 0.2s; backdrop-filter: blur(5px); flex-shrink: 0; }
-        .footer-input button[type="submit"], .panel-btn.primary { background: #38bdf8; color: #042f40; border: none; box-shadow: 0 4px 15px rgba(56,189,248,0.3); }
-        .footer-input button[type="submit"]:hover, .panel-btn.primary:hover { background: #0ea5e9; color: white; }
-        
-        .profile-container { display: flex; align-items: center; gap: 24px; background: rgba(30, 41, 59, 0.55); padding: 24px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0,0,0,0.15); flex-wrap: wrap; }
-        .avatar-lg { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid #38bdf8; background: rgba(0,0,0,0.5); box-shadow: 0 5px 15px rgba(56,189,248,0.4); }
-        .icon-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #cbd5e1; font-size: 1rem; padding: 10px; border-radius: 50%; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; backdrop-filter: blur(5px); flex-shrink: 0; }
-        .icon-btn:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
-        
-        .escrow-item { display: flex; justify-content: space-between; align-items: center; background: rgba(30, 41, 59, 0.55); padding: 16px; border-radius: 12px; font-size: 0.9rem; border: 1px solid rgba(255,255,255,0.08); color: #e2e8f0; backdrop-filter: blur(10px); flex-wrap: wrap; gap: 10px; }
-        
-        .sidebar-split-selector { display: flex; background: rgba(0, 0, 0, 0.3); padding: 4px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); flex-shrink: 0; width: 100%; box-sizing: border-box; }
-        .sub-toggle-btn { flex: 1; padding: 8px; background: none; border: none; color: #94a3b8; font-size: 0.8rem; font-weight: 600; cursor: pointer; border-radius: 8px; transition: all 0.2s; text-align: center; }
-        .sub-toggle-btn.active { background: rgba(255,255,255,0.1); color: #f8fafc; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .pool-drawer { position: absolute; right: -350px; top: 0; width: 350px; height: 100%; background: #0f172a; border-left: 1px solid #1e293b; z-index: 10; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 20px; overflow-y: auto; box-shadow: -10px 0 30px rgba(0,0,0,0.5); }
+        .pool-drawer.visible { right: 0; }
+        .pool-card-item { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 10px; font-size: 0.9rem; }
+        .inline-invoice-card { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56,189,248,0.3); padding: 15px; border-radius: 8px; margin-top: 10px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .invoice-btn { background: #38bdf8; color: #0f172a; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 10px; transition: all 0.2s; }
+        .invoice-btn:hover { background: #0ea5e9; color: white; box-shadow: 0 0 15px rgba(56,189,248,0.4); }
 
-        .group-pool-drawer { background: rgba(0, 0, 0, 0.2); border-top: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08); padding: 16px; display: none; flex-direction: column; gap: 10px; max-height: 200px; overflow-y: auto; flex-shrink: 0; }
-        .group-pool-drawer.visible { display: flex; }
-        .pool-card-item { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; font-size: 0.85rem; color: #cbd5e1; backdrop-filter: blur(5px); }
-        
-        .group-roster-text { font-size: 0.8rem; color: #94a3b8; padding: 6px 12px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; cursor: pointer; font-weight: 500; transition: all 0.2s; }
-        .group-roster-text:hover { color: #f8fafc; border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); }
+        .global-lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; backdrop-filter: blur(5px); }
+        .lightbox-img { max-width: 90%; max-height: 85vh; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.1); }
+        .lightbox-close { position: absolute; top: 20px; right: 30px; font-size: 2rem; color: white; cursor: pointer; background: rgba(255,255,255,0.1); width: 50px; height: 50px; display: flex; justify-content: center; align-items: center; border-radius: 50%; transition: all 0.2s; }
+        .lightbox-close:hover { background: rgba(244, 63, 94, 0.5); transform: rotate(90deg); }
 
-        .mention-suggest-box { position: absolute; bottom: 100%; left: 16px; background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(56,189,248,0.4); border-radius: 12px; max-height: 160px; overflow-y: auto; width: calc(100% - 32px); z-index: 1000; display: none; flex-direction: column; box-shadow: 0 -10px 30px rgba(0,0,0,0.8); margin-bottom: 8px; backdrop-filter: blur(15px); }
-        .suggest-row { padding: 10px 16px; font-size: 0.85rem; color: #e2e8f0; cursor: pointer; display: flex; align-items: center; gap: 10px; font-weight: 500; }
-        .suggest-row:hover, .suggest-row.selected { background: rgba(255,255,255,0.1); color: #38bdf8; }
-        .mention-link { color: #38bdf8; cursor: pointer; font-weight: 600; text-shadow: 0 0 5px rgba(56,189,248,0.3); }
-        .mention-link:hover { text-decoration: underline; }
+        .custom-dialog-overlay { display: none; position: fixed; inset: 0; background: rgba(4, 6, 10, 0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(10px); }
+        .custom-dialog-box { background: #0f172a; border: 1px solid rgba(56,189,248,0.3); border-radius: 12px; padding: 30px; width: 90%; max-width: 400px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8), 0 0 30px rgba(56,189,248,0.1); text-align: center; }
+        .custom-dialog-title { color: #38bdf8; font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
+        .custom-dialog-body { color: #e2e8f0; font-size: 0.95rem; line-height: 1.6; margin-bottom: 25px; white-space: pre-wrap; word-wrap: break-word; }
+        .custom-dialog-input { width: 100%; background: #1e293b; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; outline: none; margin-bottom: 20px; font-size: 1rem; text-align: center; }
+        .custom-dialog-input:focus { border-color: #38bdf8; box-shadow: 0 0 10px rgba(56,189,248,0.2); }
 
-        .custom-dialog-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(4, 6, 10, 0.8); backdrop-filter: blur(10px); z-index: 10000; justify-content: center; align-items: center; }
-        .custom-dialog-card { background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(56,189,248,0.3); border-radius: 16px; width: 90%; max-width: 420px; padding: 24px; box-sizing: border-box; box-shadow: 0 25px 60px -12px rgba(0,0,0,0.9), 0 0 30px rgba(56,189,248,0.1); display: flex; flex-direction: column; backdrop-filter: blur(20px); }
-        .custom-dialog-header { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 16px; }
-        .custom-dialog-logo { width: 28px; height: 28px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(56,189,248,0.5)); }
-        .custom-dialog-title { font-size: 0.95rem; font-weight: 700; color: #f8fafc; text-transform: uppercase; letter-spacing: 0.05em; }
-        .custom-dialog-body { font-size: 0.95rem; line-height: 1.5; color: #cbd5e1; margin-bottom: 20px; word-wrap: break-word; white-space: pre-line; }
-        .custom-dialog-footer { display: flex; justify-content: flex-end; gap: 10px; }
-
-        .global-search-result-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.9rem; font-weight: 500; }
-        .lightbox-modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.95); z-index: 9000; justify-content: center; align-items: center; cursor: zoom-out; backdrop-filter: blur(5px); }
-        .lightbox-image { max-width: 90%; max-height: 90%; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+        .escrow-item { background: rgba(30, 41, 59, 0.4); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 
         @media (max-width: 768px) {
-            .terminal-frame { width: 100%; height: 100dvh; max-width: 100%; max-height: 100dvh; border-radius: 0; display: block; }
-            .dashboard { border-radius: 0; border: none; height: 100%; }
-            .detached-logo { display: block !important; top: 15px; left: 50%; transform: translateX(-50%); width: 90px; height: 90px; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.6)) drop-shadow(0 0 15px rgba(56,189,248,0.4)); }
-            .header { padding: 80px 16px 16px 16px !important; flex-direction: column; position: relative; }
-            .header h2 { text-align: center; width: 100%; margin-bottom: 4px; }
-            .header a { position: absolute; top: 20px; right: 20px; }
-            .desktop-brand-title { display: none !important; } 
-            .dm-sidebar { width: 100% !important; border-right: none !important; display: flex !important; box-sizing: border-box; }
-            #groupCreationRow { flex-wrap: wrap; }
-            .dm-main-view { display: none !important; width: 100% !important; border-radius: 0; border: none; }
-            .dm-container.show-chat .dm-sidebar { display: none !important; }
-            .dm-container.show-chat .dm-main-view { display: flex !important; }
-            .back-btn { display: block; }
+            .two-pane-layout { flex-direction: column; }
+            .sidebar { width: 100%; height: 35vh; border-right: none; border-bottom: 1px solid #1e293b; }
+            .chat-container { display: none; height: 65vh; }
+            .chat-container.show-chat { display: flex; height: 100%; position: absolute; inset: 0; z-index: 20; }
+            .pool-drawer { width: 85%; }
+            .detached-logo { display: block !important; top: 10px; left: 50%; transform: translateX(-50%); width: 160px; height: 160px; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.6)) drop-shadow(0 0 15px rgba(56,189,248,0.4)); }
+            .header { padding: 130px 16px 16px 16px !important; flex-direction: column; position: relative; }
+            .logo-text { margin-left: 0; margin-bottom: 15px; }
+            .tab-nav { flex-direction: row; width: 100%; height: 70px; padding: 0; justify-content: space-around; border-right: none; border-top: 1px solid #1e293b; order: 3; z-index: 30; }
+            .main-container { flex-direction: column; }
+            .content-area { order: 1; height: calc(100vh - 200px); }
+            .chat-header { padding: 15px; }
+            .footer-input { padding: 15px; }
         }
     </style>
 </head>
 <body>
-    <div class="terminal-frame">
-        <img src="/static/sb.png" alt="SB Logo" class="detached-logo" onerror="this.style.display='none'">
-        <div class="dashboard">
-            <div class="header">
-                <h2><span class="desktop-brand-title">StreetBook Hub &mdash; </span><b>{{ username }}</b></h2>
-                <a href="/logout" style="color:#f87171; text-decoration:none; font-size:0.85rem; font-weight:700; text-transform: uppercase;">Exit</a>
+<!-- CUSTOM DIALOG INTERCEPTORS -->
+    <div class="custom-dialog-overlay" id="customDialogOverlay">
+        <div class="custom-dialog-box">
+            <div class="custom-dialog-title" id="customDialogTitle">[SYSTEM NOTICE]</div>
+            <div class="custom-dialog-body" id="customDialogBody">Message goes here.</div>
+            <div id="customDialogInputWrapper" style="display:none; flex-direction:column;">
+                <input type="text" id="customDialogInputField" class="custom-dialog-input" placeholder="" autocomplete="off">
             </div>
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button id="customDialogCancelBtn" class="panel-btn" style="flex:1; display:none;">ABORT</button>
+                <button id="customDialogConfirmBtn" class="panel-btn primary" style="flex:1;">CONTINUE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GLOBAL LIGHTBOX FOR ENCRYPTED IMAGES -->
+    <div class="global-lightbox" id="globalLightbox">
+        <div class="lightbox-close" onclick="closeLightboxModal()">×</div>
+        <img src="" id="lightboxTargetSrc" class="lightbox-img">
+    </div>
+
+    <!-- TOP HEADER BAR -->
+    <div class="header">
+        <img src="/static/streetbook_logo.png" class="detached-logo" onerror="this.style.display='none'">
+        <div class="logo-text">StreetBook Hub</div>
+        <div class="user-info">
+            <span style="color:#94a3b8; font-family:monospace; font-size:0.8rem;" id="e2eeKeyStatusDisplay">[CHECKING ENCLAVE...]</span>
+            <span style="font-weight:700; color:#f8fafc; font-size:1.1rem; border-right:1px solid #334155; padding-right:15px;">@{{ username }}</span>
+            <a href="{{ url_for('logout') }}" class="logout-btn">Disconnect</a>
+        </div>
+    </div>
+
+    <!-- MAIN INTERFACE CONTAINER -->
+    <div class="main-container">
+        
+        <!-- SIDE NAVIGATION TABS -->
+        <div class="tab-nav">
+            <button class="tab-btn active" id="chatTabBtn" onclick="switchTab('chatPanel', this)" title="Encrypted Comms">💬</button>
+            <button class="tab-btn" onclick="switchTab('networkPanel', this)" title="Network Feed">📡</button>
+            <button class="tab-btn" onclick="switchTab('profilePanel', this); openProfile(currentUser);" title="My Operator Profile">👤</button>
+            <button class="tab-btn" onclick="switchTab('utilPanel', this)" title="Terminal & Finances">⚙️</button>
+        </div>
+
+        <!-- CONTENT DISPLAY AREA -->
+        <div class="content-area">
             
-            <div class="nav-tabs">
-                <button class="tab-btn active" id="chatTabBtn" onclick="switchTab('chatPanel', this); loadNetworkUsers();">Messages</button>
-                <button class="tab-btn" onclick="switchTab('feedPanel', this); loadFeed();">Feed</button>
-                <button class="tab-btn" onclick="switchTab('profilePanel', this); openProfile(currentUser); shadowResetWallInputs();">Profile</button>
-                <button class="tab-btn" onclick="switchTab('utilPanel', this); loadEscrow(); loadInviteLedger();">Terminal</button>
-            </div>
-<h4 style="margin:5px 0 10px 0; color: #f8fafc; text-shadow: 0 1px 3px rgba(0,0,0,0.5); font-size: 1.1rem;">Quick Start Guide</h4>
-                <div style="background:rgba(30, 41, 59, 0.4); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); font-size:0.9rem; color:#cbd5e1; line-height:1.6; margin-bottom:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-                    <!-- ... quick start text ... -->
-                </div>
-<div id="pwaInstallContainer" style="display:none; background:rgba(56, 189, 248, 0.1); padding:20px; border-radius:12px; border:1px solid rgba(56, 189, 248, 0.3); margin-bottom:24px; text-align:center;">
-                    <h4 style="margin:0 0 10px 0; color:#38bdf8;">📲 Mobile Node Available</h4>
-                    <p style="font-size:0.85rem; color:#cbd5e1; margin:0 0 15px 0;">Install StreetBook directly to your home screen for fullscreen native access.</p>
-                    <button id="pwaInstallBtn" class="panel-btn primary" style="box-shadow: 0 4px 15px rgba(56,189,248,0.4);">Install App</button>
-                </div>
+            <!-- CHAT PANEL (1-ON-1 & GROUPS) -->
             <div id="chatPanel" class="view-panel active" style="padding:0;">
-                <div class="dm-container" id="dmContainer">
-                    <div class="dm-sidebar">
-                        <div class="sidebar-split-selector">
-                            <button class="sub-toggle-btn active" id="toggleDMsBtn" onclick="switchSidebarMode('DMs')">Direct</button>
-                            <button class="sub-toggle-btn" id="toggleGroupsBtn" onclick="switchSidebarMode('Groups')">Groups</button>
-                        </div>
-                        <div id="groupCreationRow" style="display:none; gap:8px; margin-bottom:8px; width:100%; box-sizing:border-box;">
-                            <input type="text" id="newGroupName" class="search-input" placeholder="New group title..." style="margin:0; flex:1; min-width:140px;">
-                            <button class="panel-btn primary" onclick="createNewGroupChatNode()" style="padding:0 14px; font-size:0.8rem; height:38px; flex-shrink:0;">Create</button>
-                        </div>
-                        <input type="text" class="search-input" id="sidebarSearch" placeholder="Search..." oninput="renderInboxList()">
-                        <div id="dmInboxContainer" style="display:flex; flex-direction:column; gap:6px; padding-bottom: 20px;"></div>
-                    </div>
+                <div class="two-pane-layout">
                     
-                    <div class="dm-main-view">
-                        <div class="chat-target-header-bar" id="chatTargetHeader">
-                            <button class="back-btn" id="chatBackBtn" onclick="closeDMChannel()">⬅ Back</button>
-                            <span id="chatTargetText" style="flex:1; text-align:center; color:#cbd5e1;">Select a chat to start messaging</span>
-                            
-                            <!-- E2EE Lock Badge -->
-                            <div class="e2ee-badge" id="e2eeBadge">🔒 END-TO-END ENCRYPTED</div>
-                            
-                            <div class="group-roster-text" id="chatGroupRosterDisplay" style="display:none;" onclick="triggerDisplayFullMembersRosterModal()"></div>
-                            <div id="groupActionControls" style="display:none; gap:8px;">
-                                <button class="panel-btn" onclick="triggerAddMemberPrompt()" style="padding:6px 12px; font-size:0.75rem; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2);">+ User</button>
-                                <button class="panel-btn" onclick="triggerPoolCreationPrompt()" style="padding:6px 12px; font-size:0.75rem; background:#10b981; color:#fff; border:none; box-shadow:0 0 10px rgba(16,185,129,0.4);">$ Pool</button>
+                    <div class="sidebar">
+                        <div class="sidebar-header">
+                            <input type="text" id="sidebarSearch" class="sidebar-search" placeholder="Search handles..." oninput="renderInboxList()">
+                            <div class="mode-toggle">
+                                <div class="mode-btn active" id="toggleDMsBtn" onclick="switchSidebarMode('DMs')">Direct Intel</div>
+                                <div class="mode-btn" id="toggleGroupsBtn" onclick="switchSidebarMode('Groups')">Workspaces</div>
+                            </div>
+                            <div id="groupCreationRow" style="display:none; margin-top:10px;">
+                                <button class="panel-btn primary" style="width:100%; font-size:0.8rem;" onclick="createNewGroupChatNode()">+ Mint Workspace</button>
                             </div>
                         </div>
-                        <div class="chat-area" id="chatArea"></div>
-                        <div class="typing-tracker" id="typingStatusContainer" style="padding: 0 20px; font-size: 0.8rem; color: #94a3b8; font-style: italic; min-height: 20px;"></div>
-                        
-                        <div class="group-pool-drawer" id="groupPoolDrawer"></div>
-
-                        <form class="footer-input" id="chatForm" onsubmit="sendMessage(event)">
-                            <div class="mention-suggest-box" id="chatInputSuggestionMenu"></div>
+                        <div class="inbox-list" id="dmInboxContainer"></div>
+                    </div>
+                    
+                    <div class="chat-container" id="dmContainer">
+                        <div class="chat-header">
+                            <div style="display:flex; align-items:center; gap:15px;">
+                                <button class="action-btn" style="display:none; width:35px; height:35px; font-size:1rem;" id="mobileBackBtn" onclick="closeDMChannel()">←</button>
+                                <div class="chat-target-name" id="chatTargetText">Select a node to establish handshake...</div>
+                                <div class="e2ee-badge" id="e2eeBadge">🔒 TRUE E2EE</div>
+                                <div id="chatGroupRosterDisplay" style="display:none; font-size:0.8rem; color:#94a3b8; cursor:pointer; text-decoration:underline;" onclick="triggerDisplayFullMembersRosterModal()"></div>
+                            </div>
                             
-                            <input type="file" id="photoFileInput" style="display:none;" accept="image/*" onchange="uploadChatPhoto(this)">
-                            <button type="button" class="icon-btn" id="chatPhotoBtn" onclick="document.getElementById('photoFileInput').click()">🖼️</button>
-                            <button type="button" class="icon-btn" id="chatEscrowBtn" onclick="sendInlineInvoicePrompt()" style="color:#10b981 !important; font-weight:bold; border-color:rgba(16,185,129,0.4) !important;">$</button>
-                            <input type="text" id="msgInput" placeholder="Message..." autocomplete="off" disabled>
-                            <button id="sendBtn" type="submit" disabled>Send</button>
+                            <div style="display:flex; gap:10px;" id="groupActionControls">
+                                <button class="panel-btn" style="padding:6px 12px; font-size:0.8rem;" onclick="triggerAddMemberPrompt()">+ Operator</button>
+                                <button class="panel-btn" style="padding:6px 12px; font-size:0.8rem; background:#10b981; color:white; border:none;" onclick="triggerPoolCreationPrompt()">$ Pool</button>
+                            </div>
+                        </div>
+                        
+                        <div class="chat-area" id="chatArea">
+                            <div style="text-align:center; color:#94a3b8; margin-top:40px; font-style:italic;">Awaiting secure connection...</div>
+                        </div>
+                        
+                        <div style="padding: 0 20px; color:#10b981; font-size:0.75rem; min-height:15px; font-style:italic;" id="typingStatusContainer"></div>
+                        
+                        <!-- GROUP FINANCIAL POOL DRAWER -->
+                        <div class="pool-drawer" id="groupPoolDrawer"></div>
+
+                        <form class="footer-input" onsubmit="sendMessage(event)">
+                            <button type="button" class="action-btn" id="chatPhotoBtn" style="display:none;" onclick="document.getElementById('chatPhotoUpload').click()" title="Transmit Image">📷</button>
+                            <input type="file" id="chatPhotoUpload" accept="image/*" style="display:none;" onchange="uploadChatPhoto(this)">
+                            
+                            <button type="button" class="action-btn" id="chatEscrowBtn" style="display:none; color:#10b981;" onclick="sendInlineInvoicePrompt()" title="Request Escrow Funds">💸</button>
+                            
+                            <div style="position:relative; flex:1;">
+                                <input type="text" id="msgInput" placeholder="Awaiting channel selection..." disabled autocomplete="off">
+                                <div class="suggestion-menu" id="chatInputSuggestionMenu"></div>
+                            </div>
+                            
+                            <button type="submit" class="action-btn primary" id="sendBtn" disabled title="Transmit Packet">➤</button>
                         </form>
                     </div>
                 </div>
             </div>
 
-            <div id="feedPanel" class="view-panel">
-                <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px; flex-shrink:0;">
-                    <input type="text" class="search-input" id="globalUserSearch" placeholder="Search global network handles..." oninput="filterGlobalUsers()">
-                    <div id="globalSearchResultsContainer" style="display:none; flex-direction:column; gap:6px; background:rgba(30, 41, 59, 0.7); padding:12px; border-radius:12px; max-height:200px; overflow-y:auto; border:1px solid rgba(255,255,255,0.1); backdrop-filter:blur(15px);"></div>
+            <!-- NETWORK FEED & GLOBAL DIRECTORY PANEL -->
+            <div id="networkPanel" class="view-panel">
+                <div style="max-width: 600px; margin: 0 auto;">
+                    <h3 style="color:#38bdf8; border-bottom:1px solid rgba(56,189,248,0.2); padding-bottom:10px; margin-top:0;">Global Search Matrix</h3>
+                    <input type="text" id="globalUserSearch" class="panel-input" placeholder="Query active operator handles..." oninput="filterGlobalUsers()">
+                    <div id="globalSearchResultsContainer" style="display:none; flex-direction:column; gap:10px; margin-bottom:30px; background:rgba(30, 41, 59, 0.4); padding:15px; border-radius:8px;"></div>
+
+                    <h3 style="color:#38bdf8; border-bottom:1px solid rgba(56,189,248,0.2); padding-bottom:10px;">Network Intel Feed</h3>
+                    <form class="footer-input" onsubmit="submitFeedPost(event)" style="background:transparent; border:none; padding:0 0 20px 0; display:flex; flex-direction:column; gap:10px;">
+                        <div style="position:relative; width:100%; display:flex; gap:10px; align-items:center;">
+                            <input type="text" id="feedInput" placeholder="Broadcast to network..." style="flex:1;">
+                            <div class="suggestion-menu" id="feedInputSuggestionMenu"></div>
+                            
+                            <label for="feedPhotoUpload" style="cursor:pointer; font-size:1.5rem; filter:drop-shadow(0 2px 5px rgba(0,0,0,0.5));" title="Attach Image">📸</label>
+                            <input type="file" id="feedPhotoUpload" accept="image/*" style="display:none;" onchange="handleFeedPhotoSelected(this)">
+                            <button type="submit" class="panel-btn primary" style="box-shadow: 0 4px 15px rgba(56,189,248,0.3);">Broadcast</button>
+                        </div>
+                        <div id="feedPhotoPreview" style="display:none; font-size:0.8rem; color:#10b981;">📸 Image Attached!</div>
+                    </form>
+                    <div id="feedContainer"></div>
                 </div>
-                <form class="footer-input" onsubmit="submitFeedPost(event)" style="padding:0; background:none; border:none; gap:12px; flex-shrink:0;">
-                    <div class="mention-suggest-box" id="feedInputSuggestionMenu"></div>
-                    <input type="file" id="feedPhotoInput" style="display:none;" accept="image/*" onchange="handleFeedPhotoSelected(this)">
-                    <button type="button" class="icon-btn" id="feedPhotoBtn" onclick="document.getElementById('feedPhotoInput').click()">🖼️</button>
-                    <input type="text" id="feedInput" placeholder="What's happening?">
-                    <button type="submit" class="primary">Post</button>
-                </form>
-                <div id="feedPhotoPreview" style="display:none; font-size:0.85rem; color:#38bdf8; font-weight:600; padding-left:54px; margin-top:4px; flex-shrink:0;"></div>
-                <div id="feedContainer" style="display:flex; flex-direction:column; gap:16px; margin-top:12px;"></div>
             </div>
 
+            <!-- USER PROFILE & WALL PANEL -->
             <div id="profilePanel" class="view-panel">
-                <div class="profile-container">
-                    <input type="file" id="avatarFileInput" style="display:none;" accept="image/*" onchange="uploadProfileAvatar(this)">
-                    <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150" class="avatar-lg" id="profPicImg" alt="Avatar" style="cursor:pointer;" onclick="document.getElementById('avatarFileInput').click()">
-                    <div>
-                        <h3 id="profUser" style="margin:0 0 6px 0; color:#f8fafc; font-size: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">@Username</h3>
-                        <p id="profStripe" style="font-size:0.85rem; color:#94a3b8; margin:0; font-weight: 500;"></p>
+                <div style="max-width: 600px; margin: 0 auto; background:rgba(15, 23, 42, 0.6); padding:30px; border-radius:12px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
+                    <div style="position:relative; display:inline-block;">
+                        <img src="" id="profPicImg" style="width:120px; height:120px; border-radius:50%; object-fit:cover; border:3px solid #38bdf8; box-shadow:0 0 20px rgba(56,189,248,0.3); margin-bottom:15px;">
+                        <label for="profPicUpload" style="position:absolute; bottom:20px; right:0; background:#1e293b; border:1px solid #334155; border-radius:50%; width:35px; height:35px; display:flex; justify-content:center; align-items:center; cursor:pointer; font-size:1.2rem; box-shadow:0 4px 10px rgba(0,0,0,0.5); z-index:5;">✏️</label>
+                        <input type="file" id="profPicUpload" accept="image/*" style="display:none;" onchange="uploadProfileAvatar(this)">
                     </div>
+                    
+                    <h2 id="profUser" style="margin:0 0 5px 0; color:#f8fafc; font-size:1.8rem; letter-spacing:1px;"></h2>
+                    <div id="profStripe" style="font-size:0.85rem; color:#10b981; font-family:monospace; margin-bottom:20px; background:rgba(16,185,129,0.1); display:inline-block; padding:4px 10px; border-radius:4px;"></div>
+                    <div id="profBio" style="font-size:1rem; color:#e2e8f0; line-height:1.6; margin-bottom:25px; white-space:pre-wrap; background:rgba(0,0,0,0.2); padding:15px; border-radius:8px;"></div>
+                    
+                    <div id="profControls" style="display:flex; flex-direction:column; align-items:center; gap:15px; margin-bottom:30px;"></div>
+                    
+                    <h3 style="color:#38bdf8; border-bottom:1px solid rgba(56,189,248,0.2); padding-bottom:10px; text-align:left; margin-top:30px;">Operator Wall</h3>
+                    <div id="profileWallPostFormContainer" style="text-align:left; margin-bottom:20px;"></div>
+                    <div id="profileWallContainer" style="text-align:left;"></div>
                 </div>
-                <div style="background:rgba(30, 41, 59, 0.4); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); min-height:60px; font-size:0.95rem; line-height:1.5; color:#e2e8f0; flex-shrink:0; backdrop-filter:blur(5px);" id="profBio"></div>
-                <div id="profControls" style="display:flex; flex-direction:column; gap:12px; margin-top:12px; flex-shrink:0;"></div>
-                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:24px 0 16px 0; flex-shrink:0;">
-                <h4 style="margin:0 0 12px 0; color:#f8fafc; font-size: 1.1rem; flex-shrink:0; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Profile Wall</h4>
-                <div id="profileWallPostFormContainer" style="flex-shrink:0;"></div>
-                <div id="profileWallContainer" style="display:flex; flex-direction:column; gap:16px; margin-top:12px;"></div>
             </div>
 
+            <!-- TERMINAL PANEL -->
             <div id="utilPanel" class="view-panel">
-                <h4 style="margin:5px 0 10px 0; color: #f8fafc; text-shadow: 0 1px 3px rgba(0,0,0,0.5); font-size: 1.1rem;">Cryptographic Vault (Bitcoin)</h4>
-                <div style="background:rgba(30, 41, 59, 0.4); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); margin-bottom:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-                    
-                    <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:10px;">Vault Status: <span id="vaultStatusDisplay" style="color:#10b981; font-family:monospace; font-weight:bold;">[INITIALIZING...]</span></div>
-                    <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:15px;">Live Balance: <span id="vaultBalanceDisplay" style="color:#f59e0b; font-family:monospace; font-weight:bold; font-size:1.1rem;">[FETCHING...]</span></div>
-                    
-                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top:15px;">
-                        <button class="panel-btn primary" onclick="requestLightningInvoice()" style="background:#10b981; border:none; box-shadow:0 4px 10px rgba(16,185,129,0.3);">📥 Receive (Invoice)</button>
-                        <button class="panel-btn primary" onclick="payLightningInvoice()" style="background:#f43f5e; border:none; box-shadow:0 4px 10px rgba(244,63,94,0.3);">📤 Pay (Bolt11)</button>
-                    </div>
-
-                    <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top:10px;">E2EE Key Status: <span id="e2eeKeyStatusDisplay" style="color:#f59e0b; font-family:monospace; font-weight:bold;">[GENERATING LOCAL RSA KEYS...]</span></div>
-                    
-                    <button class="panel-btn primary" id="triggerOnrampBtn" onclick="launchStripeOnramp()" style="background:#f59e0b; color:#fff; box-shadow:0 4px 10px rgba(245,158,11,0.3); border:none; display:none;">💳 Deposit via Card (Stripe Onramp)</button>
-                    <div id="stripe-onramp-container" style="margin-top: 15px; border-radius: 12px; overflow:hidden; display:none;"></div>
-                </div>
-
+                <h3 style="margin-top:0; color:#38bdf8; text-transform:uppercase; letter-spacing:1px; font-size:1.2rem; border-bottom:1px solid rgba(56,189,248,0.2); padding-bottom:10px;">Network Terminal</h3>
+                
                 <h4 style="margin:5px 0 10px 0; color: #f8fafc; text-shadow: 0 1px 3px rgba(0,0,0,0.5); font-size: 1.1rem;">Quick Start Guide</h4>
                 <div style="background:rgba(30, 41, 59, 0.4); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); font-size:0.9rem; color:#cbd5e1; line-height:1.6; margin-bottom:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-                    <strong style="color:#38bdf8; font-size: 1rem;">Welcome to the Hub.</strong> You are operating on a closed-loop, secure network.<br><br>
-                    <strong style="color:#f8fafc;">1. The Feed & Wall:</strong> Broadcast globally on the Feed. Your Profile Wall is your personal ledger.<br>
-                    <strong style="color:#f8fafc;">2. True E2EE Messaging:</strong> DMs are mathematically sealed on your device using RSA keys. The server is a blind courier and cannot read your messages.<br>
-                    <strong style="color:#f8fafc;">3. The Vault:</strong> Click the <strong style="color:#10b981;">$</strong> icon in DMs to request Escrow, or pool funds in Groups. Unsettled escrows refund after 24 hours.<br>
-                    <strong style="color:#f8fafc;">4. Gatekeeping:</strong> You hold minting privileges. Generate single-use tokens below to invite trusted operators.
+                    <b>1. Security Enclave:</b> Your master RSA keys are encrypted locally on this device using your Vault Password. The network cannot read your messages.<br><br>
+                    <b>2. Invite Ledger:</b> Use the terminal below to mint single-use registration keys. You are responsible for the operators you invite.<br><br>
+                    <b>3. Capital Routing:</b> Attach a Stripe account or use the native Bitcoin Lightning vault to transfer funds anonymously inside chat channels.
                 </div>
 
-                <h4 style="margin:5px 0 15px 0; color: #f8fafc; text-shadow: 0 1px 3px rgba(0,0,0,0.5); font-size: 1.1rem;">Operator Lineage (Invite Ledger)</h4>
-                <button class="panel-btn primary" onclick="generateInvite()" style="width: fit-content; margin-bottom: 10px;">Generate Secure Token</button>
-                <div id="inviteDisplay" style="text-align:center; margin:10px 0; font-weight:700; color:#38bdf8; font-size:1.4rem; letter-spacing: 2px; text-shadow: 0 0 10px rgba(56,189,248,0.4);"></div>
-                
-                <div id="inviteLedgerContainer" style="display:flex; flex-direction:column; gap:8px; margin-bottom:24px;"></div>
+                <!-- PWA Install Container -->
+                <div id="pwaInstallContainer" style="display:none; background:rgba(56, 189, 248, 0.1); padding:20px; border-radius:12px; border:1px solid rgba(56, 189, 248, 0.3); margin-bottom:24px; text-align:center;">
+                    <h4 style="margin:0 0 10px 0; color:#38bdf8;">📲 Mobile Node Available</h4>
+                    <p style="font-size:0.85rem; color:#cbd5e1; margin:0 0 15px 0;">Install StreetBook directly to your home screen.</p>
+                    <button id="pwaInstallBtn" class="panel-btn primary" style="box-shadow: 0 4px 15px rgba(56,189,248,0.4);">Install App</button>
+                    <p id="iosPwaHint" style="display:none; font-size:0.75rem; color:#94a3b8; margin-top:10px;">iOS detected: Tap the Share icon at the bottom of Safari, then select "Add to Home Screen".</p>
+                </div>
 
-                <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:10px 0 24px 0;">
-                <h4 style="margin:5px 0 15px 0; color: #f8fafc; text-shadow: 0 1px 3px rgba(0,0,0,0.5); font-size: 1.1rem;">Escrow Audit Logs</h4>
-                <div id="escrowContainer" style="display:flex; flex-direction:column; gap:12px;"></div>
-            </div>
-        </div>
-    </div>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px;">
+                    <!-- Invite Node -->
+                    <div style="background:rgba(15, 23, 42, 0.5); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:20px;">
+                        <h4 style="margin:0 0 15px 0; color:#f8fafc;">Invite Ledger</h4>
+                        <button class="panel-btn primary" style="width:100%; margin-bottom:15px;" onclick="generateInvite()">Mint Access Key</button>
+                        <div id="inviteDisplay" style="font-family:monospace; color:#38bdf8; font-size:1.1rem; text-align:center; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px; min-height:24px; margin-bottom:15px;"></div>
+                        <h5 style="margin:0 0 10px 0; color:#94a3b8; font-size:0.8rem; text-transform:uppercase;">Audit Trail</h5>
+                        <div id="inviteLedgerContainer" style="display:flex; flex-direction:column; gap:8px;"></div>
+                    </div>
 
-    <div id="globalLightbox" class="lightbox-modal" onclick="closeLightboxModal()">
-        <img id="lightboxTargetSrc" class="lightbox-image" src="" alt="Enlarged Frame" onclick="event.stopPropagation();">
-    </div>
+                    <!-- Financial Node -->
+                    <div style="background:rgba(15, 23, 42, 0.5); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:20px;">
+                        <h4 style="margin:0 0 15px 0; color:#f8fafc;">Financial Vault</h4>
+                        <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:8px;">Protocol: Lightning Network (BTC)</div>
+                        <div id="vaultStatusDisplay" style="font-family:monospace; color:#10b981; margin-bottom:15px; font-weight:600;">[INITIALIZING...]</div>
+                        <div style="font-size:2rem; font-weight:700; color:#e2e8f0; margin-bottom:20px; text-shadow:0 0 15px rgba(255,255,255,0.1);" id="vaultBalanceDisplay">-- sats</div>
+                        
+                        <div style="display:flex; gap:10px; margin-bottom:15px;">
+                            <button class="panel-btn" style="flex:1;" onclick="requestLightningInvoice()">Receive</button>
+                            <button class="panel-btn" style="flex:1;" onclick="executeDirectTransfer()">Direct Transfer</button>
+                        </div>
+                        <button id="triggerOnrampBtn" class="panel-btn primary" style="width:100%; display:none; margin-bottom:15px;" onclick="launchStripeOnramp()">Fiat Onramp ($USD)</button>
+                        <div id="stripe-onramp-container" style="display:none; margin-top:15px; border-radius:8px; overflow:hidden;"></div>
+                    </div>
+                </div>
 
-    <div class="custom-dialog-overlay" id="customDialogOverlay">
-        <div class="custom-dialog-card">
-            <div class="custom-dialog-header">
-                <img src="/static/sb.png" alt="SB" class="custom-dialog-logo" onerror="this.style.display='none'">
-                <div class="custom-dialog-title" id="customDialogTitle">[SYSTEM INDEX]</div>
+                <div style="margin-top:20px; background:rgba(15, 23, 42, 0.5); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:20px;">
+                    <h4 style="margin:0 0 15px 0; color:#f8fafc;">Escrow Audit Trail</h4>
+                    <div id="escrowContainer" style="display:flex; flex-direction:column; gap:10px;"></div>
+                </div>
             </div>
-            <div class="custom-dialog-body" id="customDialogBody">Operational notice payload text string.</div>
-            <div id="customDialogInputWrapper" style="display:none; flex-direction:column; width:100%;">
-                <input type="text" id="customDialogInputField" class="panel-input" style="margin-bottom:16px;">
-            </div>
-            <div class="custom-dialog-footer" id="customDialogFooter">
-                <button class="panel-btn" id="customDialogCancelBtn" style="display:none;">Cancel</button>
-                <button class="panel-btn primary" id="customDialogConfirmBtn">Acknowledge</button>
-            </div>
+            
         </div>
     </div>
 <script>
@@ -459,7 +448,7 @@
                               /^10\./.test(window.location.hostname);
 
         const wsHost = isLocalNetwork ? "ws://" + window.location.hostname + ":5001" : "wss://undergroundofficial-mesh.onrender.com";
-        let socket = new WebSocket(wsHost);
+        let socket = null; // Socket waits for vault unlock
         let decryptedHistory = [];
         let networkUsersDirectory = [];
         let selectedFeedPhotoPath = "";
@@ -576,7 +565,6 @@
                 return importedKey;
             },
 
-            // --- 1-ON-1 DIRECT MESSAGE ENCRYPTION ---
             encrypt: async function(plaintext, targetUsername) {
                 const targetPubKey = await this.fetchTargetKey(targetUsername);
                 if (!targetPubKey) throw new Error("Target user public key missing.");
@@ -587,7 +575,6 @@
                 return JSON.stringify({ k: this.ab2str(encryptedAesKey), i: this.ab2str(iv.buffer), p: this.ab2str(encryptedPayload) });
             },
 
-            // --- NEW: MULTI-PARTY SENDER FAN-OUT ENCRYPTION ---
             encryptGroup: async function(plaintext, memberUsernames) {
                 const aesKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt"]);
                 const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -596,7 +583,6 @@
                 const keysMap = {};
                 const rawAesKey = await crypto.subtle.exportKey("raw", aesKey);
                 
-                // Fan-Out: Encrypt the single AES key uniquely for every member in the group
                 for (const username of memberUsernames) {
                     try {
                         const pubKey = await this.fetchTargetKey(username);
@@ -607,19 +593,14 @@
                     } catch(e) { console.warn("Could not encrypt packet for node: " + username); }
                 }
                 
-                return JSON.stringify({ 
-                    isGroup: true, 
-                    i: this.ab2str(iv.buffer), 
-                    p: this.ab2str(encryptedPayload), 
-                    keys: keysMap 
-                });
+                return JSON.stringify({ isGroup: true, i: this.ab2str(iv.buffer), p: this.ab2str(encryptedPayload), keys: keysMap });
             },
 
             decrypt: async function(cipherJsonStr) {
                 if (!this.privateKey) return "[🔒 VAULT LOCKED]";
                 try {
                     let packet;
-                    try { packet = JSON.parse(cipherJsonStr); } catch(e) { return cipherJsonStr; } // Fallback for old plaintext
+                    try { packet = JSON.parse(cipherJsonStr); } catch(e) { return cipherJsonStr; }
                     
                     if (packet.isGroup) return await this.decryptGroup(packet);
                     if (!packet.k || !packet.i || !packet.p) return cipherJsonStr;
@@ -628,9 +609,7 @@
                     const aesKey = await crypto.subtle.importKey("raw", aesKeyRaw, { name: "AES-GCM" }, true, ["decrypt"]);
                     const decryptedPayloadBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(this.str2ab(packet.i)) }, aesKey, this.str2ab(packet.p));
                     return new TextDecoder().decode(decryptedPayloadBuf);
-                } catch (e) {
-                    return "[🔒 SECURE MESSAGE - DECRYPTION FAILED]";
-                }
+                } catch (e) { return "[🔒 SECURE MESSAGE - DECRYPTION FAILED]"; }
             },
 
             decryptGroup: async function(packet) {
@@ -642,12 +621,11 @@
                     const aesKey = await crypto.subtle.importKey("raw", aesKeyRaw, { name: "AES-GCM" }, true, ["decrypt"]);
                     const decryptedPayloadBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(this.str2ab(packet.i)) }, aesKey, this.str2ab(packet.p));
                     return new TextDecoder().decode(decryptedPayloadBuf);
-                } catch (e) {
-                    return "[🔒 SECURE MESSAGE - DECRYPTION FAILED]";
-                }
+                } catch (e) { return "[🔒 SECURE MESSAGE - DECRYPTION FAILED]"; }
             }
         };
-// --- CRYPTOGRAPHIC VAULT INIT & LIVE FINANCIAL BALANCE ENGINE ---
+
+        // --- CRYPTOGRAPHIC VAULT INIT & LIVE FINANCIAL BALANCE ENGINE ---
         function initCryptoVault() {
             fetch('/api/profile/' + currentUser)
                 .then(res => res.json())
@@ -656,13 +634,13 @@
                     const onrampBtn = document.getElementById('triggerOnrampBtn');
                     if(data.ln_wallet_id) {
                         userLightningWalletId = data.ln_wallet_id;
-                        statusDisplay.innerText = "[SECURE] - NODE ID: " + data.ln_wallet_id.substring(0, 12) + "...";
+                        statusDisplay.innerText = "[CRYPTOGRAPHIC VAULT SECURED]";
                         onrampBtn.style.display = "inline-block";
                         refreshLiveLightningBalance();
                     } else {
-                        statusDisplay.innerText = "[NO VAULT ATTACHED - LEGACY ACCOUNT]";
+                        statusDisplay.innerText = "[NO VAULT ATTACHED]";
                         statusDisplay.style.color = "#f59e0b";
-                        document.getElementById('vaultBalanceDisplay').innerText = "0 sats (Mock Vault Active)";
+                        document.getElementById('vaultBalanceDisplay').innerText = "0 sats";
                     }
                 });
         }
@@ -705,25 +683,29 @@
             });
         }
 
-        async function payLightningInvoice() {
-            const bolt11 = await customPrompt("Paste raw text of the destination BOLT11 Lightning Invoice:", "lnbc...", "PAY LIGHTNING INVOICE");
-            if (!bolt11) return;
+        async function executeDirectTransfer() {
+            const target = await customPrompt("Enter destination operator handle:", "@username", "DIRECT TRANSFER");
+            if (!target) return;
+            const cleanTarget = target.replace("@", "").trim();
             
+            const amount = await customPrompt("Enter amount in Satoshis (sats) to route to @" + cleanTarget + ":", "1000", "SET TRANSFER AMOUNT");
+            if (!amount || isNaN(amount) || parseInt(amount) <= 0) return;
+
             document.getElementById('vaultBalanceDisplay').innerText = "[ROUTING CAPITAL...]";
-            
-            fetch('/api/wallet/pay', {
+
+            fetch('/api/wallet/transfer', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ bolt11: bolt11 })
+                body: JSON.stringify({ target_username: cleanTarget, amount_sats: parseInt(amount) })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.error) customAlert(data.error, "ROUTING REFUSED");
-                else customAlert("Invoice successfully settled via peer-to-peer lightning channels.", "TRANSACTION COMPLETE");
+                else customAlert("Successfully routed " + amount + " sats to @" + cleanTarget + ".", "TRANSFER COMPLETE");
                 refreshLiveLightningBalance();
             })
             .catch(() => {
-                customAlert("Connection dropped during execution matrix.", "ROUTING FAULT");
+                customAlert("Connection dropped during execution.", "NETWORK FAULT");
                 refreshLiveLightningBalance();
             });
         }
@@ -741,7 +723,6 @@
                         container.innerHTML = "<div style='padding:20px; color:#f87171; border:1px solid rgba(248,113,113,0.3); border-radius:8px; background: rgba(248,113,113,0.1); font-size:0.85rem;'><b>⚠️ Stripe Gateway Rejected:</b><br>" + data.error + "<br><br><i>Note: To render the live UI, your Stripe account must have the 'Crypto Onramp' feature explicitly enabled in your Stripe Dashboard settings.</i></div>";
                         return;
                     }
-                    
                     container.innerHTML = ""; 
                     const stripeOnramp = StripeOnramp('pk_test_placeholder_key_replace_me'); 
                     const session = stripeOnramp.createSession({ clientSecret: data.client_secret });
@@ -760,9 +741,11 @@
 
         function switchTab(panelId, btnElement) {
             document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            if(btnElement) {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btnElement.classList.add('active');
+            }
             document.getElementById(panelId).classList.add('active');
-            if(btnElement) btnElement.classList.add('active');
         }
 
         function switchSidebarMode(mode) {
@@ -786,9 +769,7 @@
             target.src = url; 
             modal.style.display = "flex";
         }
-        function closeLightboxModal() { 
-            document.getElementById('globalLightbox').style.display = "none"; 
-        }
+        function closeLightboxModal() { document.getElementById('globalLightbox').style.display = "none"; }
 
         // --- MENTION AUTOCOMPLETE ENGINE ---
         let currentSuggestFocus = -1;
@@ -891,6 +872,7 @@
 
         // --- REAL-TIME SECURE MESH WEBSOCKET MULTIPLEXER (WITH E2EE INTERCEPTORS) ---
         function setupSocketListeners() {
+            socket = new WebSocket(wsHost);
             socket.onopen = function() { 
                 console.log("🚀 Secure Network Mesh Active.");
                 socket.send(JSON.stringify({ username: currentUser }));
@@ -915,14 +897,10 @@
                     return;
                 }
                 
-                // ASYNC 1-ON-1 HISTORY DECRYPTION
                 if(data.is_history) { 
                     decryptedHistory = await Promise.all(data.history.map(async (msg) => {
-                        if (msg.sender !== currentUser) {
-                            msg.text = await E2EE.decrypt(msg.text);
-                        } else {
-                            msg.text = "[🔒 E2EE Outbound Sealed]";
-                        }
+                        if (msg.sender !== currentUser) { msg.text = await E2EE.decrypt(msg.text); } 
+                        else { msg.text = "[🔒 E2EE Outbound Sealed]"; }
                         return msg;
                     }));
                     renderInboxList(); 
@@ -930,7 +908,6 @@
                     return; 
                 }
                 
-                // LIVE GROUP CHAT INBOUND DECRYPTION
                 if (data.group_id) {
                     if (activeGroupId === data.group_id) { 
                         const decText = await E2EE.decrypt(data.text);
@@ -939,7 +916,6 @@
                     return;
                 }
 
-                // LIVE 1-ON-1 INBOUND DECRYPTION
                 if (data.sender && data.receiver) {
                     if (data.sender !== currentUser) {
                         data.text = await E2EE.decrypt(data.text);
@@ -959,33 +935,25 @@
                 document.getElementById('chatTargetText').innerHTML = '<span style="color:#f87171;">⚠️ MESH DISCONNECTED</span>';
             };
         }
-        setupSocketListeners();
 
         function loadNetworkUsers() {
-            fetch('/api/users')
-                .then(res => res.json())
-                .then(users => { networkUsersDirectory = users; renderInboxList(); });
+            fetch('/api/users').then(res => res.json()).then(users => { networkUsersDirectory = users; renderInboxList(); });
         }
 
         function loadGroupChatDirectories() {
-            fetch('/api/groups/list')
-                .then(res => res.json())
-                .then(groups => {
-                    groupDirectoryList = groups;
-                    const sidebar = document.getElementById('dmInboxContainer'); 
-                    sidebar.innerHTML = "";
-                    if(groups.length === 0) { 
-                        sidebar.innerHTML = '<div style="font-size:0.85rem; color:#94a3b8; text-align:center; padding-top:12px;">No active groups.</div>'; 
-                        return; 
-                    }
-                    groups.forEach(g => {
-                        const card = document.createElement('div');
-                        card.className = "inbox-card" + (activeGroupId === g.id ? " active" : "");
-                        card.innerHTML = '⚙️ <span>' + g.name + '</span> <small style="font-size:0.7rem; color:#94a3b8; margin-left:auto;">[@' + g.creator + ']</small>';
-                        card.onclick = () => mountGroupChatChannel(g);
-                        sidebar.appendChild(card);
-                    });
+            fetch('/api/groups/list').then(res => res.json()).then(groups => {
+                groupDirectoryList = groups;
+                const sidebar = document.getElementById('dmInboxContainer'); 
+                sidebar.innerHTML = "";
+                if(groups.length === 0) { sidebar.innerHTML = '<div style="font-size:0.85rem; color:#94a3b8; text-align:center; padding-top:12px;">No active groups.</div>'; return; }
+                groups.forEach(g => {
+                    const card = document.createElement('div');
+                    card.className = "inbox-card" + (activeGroupId === g.id ? " active" : "");
+                    card.innerHTML = '⚙️ <span>' + g.name + '</span> <small style="font-size:0.7rem; color:#94a3b8; margin-left:auto;">[@' + g.creator + ']</small>';
+                    card.onclick = () => mountGroupChatChannel(g);
+                    sidebar.appendChild(card);
                 });
+            });
         }
 
         async function createNewGroupChatNode() {
@@ -999,11 +967,8 @@
             activeRecipient = ""; activeGroupId = group.id; activeGroupObject = group;
             document.getElementById('dmContainer').classList.add('show-chat');
             document.getElementById('chatTargetText').innerHTML = '🛡️ Workspace: <b>' + group.name + '</b>';
-            
-            // ACTIVATE TRUE E2EE BADGE FOR GROUPS
             document.getElementById('e2eeBadge').innerText = '🔒 MULTI-PARTY E2EE';
             document.getElementById('e2eeBadge').classList.add('active');
-            
             document.getElementById('groupActionControls').style.display = "flex";
             document.getElementById('chatPhotoBtn').style.display = "flex"; 
             document.getElementById('chatEscrowBtn').style.display = "none"; 
@@ -1012,7 +977,6 @@
             document.getElementById('sendBtn').disabled = false;
             document.getElementById('groupPoolDrawer').classList.add('visible');
             
-            // Force await roster load before we allow fetching messages so we can encrypt
             await synchronizeGroupMembersVisibilityDisplay(group.id);
             loadGroupMoneyPoolsData();
 
@@ -1205,30 +1169,23 @@
 
         async function sendMessage(e) {
             e.preventDefault(); const input = document.getElementById('msgInput'); const text = input.value.trim(); if(!text) return;
-            if (socket.readyState !== WebSocket.OPEN) { customAlert("Secure connection lost. Please reconnect.", "CONNECTION ERROR"); return; }
+            if (!socket || socket.readyState !== WebSocket.OPEN) { customAlert("Secure connection lost. Please reconnect.", "CONNECTION ERROR"); return; }
             
             if (activeGroupId) { 
                 if(!activeGroupObject || !activeGroupObject.cached_members_list) {
                     customAlert("Workspace roster syncing. Please try again in 1 second.", "ROSTER SYNC"); return;
                 }
                 try {
-                    // FAN-OUT ENCRYPTION
                     const cipherText = await E2EE.encryptGroup(text, activeGroupObject.cached_members_list);
                     socket.send(JSON.stringify({ group_id: activeGroupId, text: cipherText })); 
-                } catch(err) {
-                    customAlert("Failed to encrypt group packet. " + err.message, "CRYPTOGRAPHY ERROR");
-                    return;
-                }
+                } catch(err) { customAlert("Encryption Fault: " + err.message); return; }
             } else { 
                 try {
                     const cipherText = await E2EE.encrypt(text, activeRecipient);
                     socket.send(JSON.stringify({ sender: currentUser, receiver: activeRecipient, text: cipherText })); 
                     decryptedHistory.push({ sender: currentUser, receiver: activeRecipient, text: text });
                     appendBubble(currentUser, text);
-                } catch (err) {
-                    customAlert("Failed to negotiate secure encryption handshake with recipient. " + err.message, "CRYPTOGRAPHY ERROR");
-                    return;
-                }
+                } catch (err) { customAlert("Encryption Fault: " + err.message); return; }
             }
             input.value = ''; input.focus();
         }
@@ -1236,7 +1193,7 @@
         function uploadChatPhoto(element) {
             const file = element.files[0]; if(!file) return; const formData = new FormData(); formData.append('photo', file);
             fetch('/api/upload', { method: 'POST', body: formData }).then(res => res.json()).then(async data => {
-                if(data.url && socket.readyState === WebSocket.OPEN) {
+                if(data.url && socket && socket.readyState === WebSocket.OPEN) {
                     const textPayload = '[IMAGE]' + data.url;
                     if(activeGroupId) {
                         try {
@@ -1259,7 +1216,7 @@
         function handleFeedPhotoSelected(element) {
             const file = element.files[0]; if(!file) return; const formData = new FormData(); formData.append('photo', file);
             fetch('/api/upload', { method: 'POST', body: formData }).then(res => res.json()).then(data => {
-                if(data.url) { selectedFeedPhotoPath = data.url; document.getElementById('feedPhotoPreview').innerText = "📸 Image Attached!"; document.getElementById('feedPhotoPreview').style.display = "block"; }
+                if(data.url) { selectedFeedPhotoPath = data.url; document.getElementById('feedPhotoPreview').style.display = "block"; }
             });
         }
 
@@ -1291,7 +1248,7 @@
                 posts.forEach(p => {
                     container.innerHTML += '<div class="feed-post">' +
                         '<div class="feed-post-header">' +
-                            '<img src="' + (p.profile_pic || DEFAULT_AVATAR_CDN) + '" class="feed-avatar">' +
+                            '<img src="' + (p.profile_pic || DEFAULT_AVATAR_CDN) + '" class="feed-avatar" onclick="openProfile(\'' + p.username + '\')">' +
                             '<div class="feed-content-area">' +
                                 '<div class="feed-user" onclick="openProfile(\'' + p.username + '\')">@' + p.username + '</div>' +
                                 '<div class="feed-body">' + parseMentions(p.content) + '</div>' +
@@ -1308,28 +1265,8 @@
             fetch('/api/feed', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ content: val, image_url: selectedFeedPhotoPath }) }).then(() => { input.value = ''; selectedFeedPhotoPath = ""; document.getElementById('feedPhotoPreview').style.display = "none"; loadFeed(); });
         }
 
-        function openProfile(targetUser) {
-            activeProfileUser = targetUser; switchTab('profilePanel', null);
-            fetch('/api/profile/' + targetUser).then(res => res.json()).then(data => {
-                document.getElementById('profUser').innerText = '@' + data.username;
-                const avatar = document.getElementById('profPicImg');
-                avatar.src = data.profile_pic || DEFAULT_AVATAR_CDN;
-                document.getElementById('profStripe').innerText = data.stripe_account ? 'Wallet ID: ' + data.stripe_account : "No Payment Method Attached";
-                document.getElementById('profBio').innerHTML = parseMentions(data.bio);
-                
-                const controls = document.getElementById('profControls'); controls.innerHTML = '';
-                const wallForm = document.getElementById('profileWallPostFormContainer');
-                if(data.username === currentUser) {
-                    controls.innerHTML = '<div style="display:flex; gap:10px; width:100%;"><input type="text" id="newBio" class="panel-input" placeholder="Update bio..."><button class="panel-btn primary" onclick="updateBio()">Save</button></div>';
-                    wallForm.innerHTML = '<form class="footer-input" onsubmit="submitProfileWallPost(event)" style="background:none; padding:0 0 10px 0; border:none;"><input type="text" id="profileWallInput" placeholder="Write on your wall..."><button type="submit" class="panel-btn primary" style="box-shadow: 0 4px 15px rgba(56,189,248,0.3);">Post</button></form>';
-                } else {
-                    controls.innerHTML = '<button class="panel-btn primary" style="width: fit-content;" onclick="openDMChannel(\'' + data.username + '\')">Direct Message</button>';
-                    wallForm.innerHTML = '';
-                }
-                loadProfileWall(targetUser);
-            });
-        }
-
+        // openProfile and submitProfileWallPost have been redefined in Part 2 and placed directly in DOM context.
+        // Below is the helper loader and bio updater for completeness.
         function loadProfileWall(targetUser) {
             fetch('/api/profile/' + targetUser + '/posts').then(res => res.json()).then(posts => {
                 const container = document.getElementById('profileWallContainer'); 
@@ -1343,7 +1280,7 @@
                     
                     container.innerHTML += '<div class="feed-post">' +
                         '<div class="feed-post-header">' +
-                            '<img src="' + avatarSrc + '" class="feed-avatar">' +
+                            '<img src="' + avatarSrc + '" class="feed-avatar" onclick="openProfile(\'' + p.username + '\')">' +
                             '<div class="feed-content-area">' +
                                 '<div class="feed-user" onclick="openProfile(\'' + p.username + '\')">@' + p.username + '</div>' +
                                 '<div class="feed-body">' + parseMentions(p.content) + '</div>' + imageTag +
@@ -1354,11 +1291,6 @@
             });
         }
 
-        function submitProfileWallPost(e) { 
-            e.preventDefault(); const input = document.getElementById('profileWallInput'); const val = input.value.trim(); if(!val) return; 
-            fetch('/api/profile/' + activeProfileUser + '/posts', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ content: val }) }).then(() => { input.value = ''; loadProfileWall(activeProfileUser); }); 
-        }
-        
         function updateBio() { 
             const bio = document.getElementById('newBio').value.trim(); 
             fetch('/api/profile/' + currentUser, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ bio: bio }) }).then(() => openProfile(currentUser)); 
@@ -1399,7 +1331,7 @@
             if(!amount || isNaN(amount) || parseFloat(amount) <= 0) return;
             fetch('/api/escrow/create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ receiver: activeRecipient, amount: amount }) })
                 .then(res => res.json()).then(async data => { 
-                    if(data.id && socket.readyState === WebSocket.OPEN) {
+                    if(data.id && socket && socket.readyState === WebSocket.OPEN) {
                         const payloadStr = '[ESCROW_INVOICE:' + data.id + ',' + amount + ']';
                         try {
                             const cipherText = await E2EE.encrypt(payloadStr, activeRecipient);
@@ -1427,7 +1359,7 @@
                 if(ledgers.length === 0) { c.innerHTML = '<div style="font-size:0.85rem; color:#94a3b8; text-align:center;">No keys generated yet.</div>'; return; }
                 ledgers.forEach(l => {
                     let statusColor = l.status === 'used' ? '#10b981' : (l.status === 'expired' ? '#f87171' : '#f59e0b');
-                    let usedByText = l.used_by ? ' ➔ Claimed by <span style="color:#38bdf8;">@' + l.used_by + '</span>' : '';
+                    let usedByText = l.used_by ? ' ➔ Claimed by <span class="mention-link" onclick="openProfile(\'' + l.used_by + '\')">@' + l.used_by + '</span>' : '';
                     c.innerHTML += '<div style="background: rgba(0, 0, 0, 0.3); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem; color: #e2e8f0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">' +
                         '<div><strong>' + l.key + '</strong>' + usedByText + '</div>' +
                         '<div style="color:' + statusColor + '; font-weight:600; text-transform:uppercase;">[' + l.status + ']</div>' +
@@ -1472,10 +1404,16 @@
             container.style.display = "flex";
         }
 
-        function shadowResetWallInputs() {}
-// --- PWA SERVICE WORKER & INSTALLATION INTERCEPTOR ---
+        // --- PWA SERVICE WORKER & INSTALLATION INTERCEPTOR ---
         let deferredPrompt;
         
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if(isIOS) {
+            document.getElementById('pwaInstallContainer').style.display = 'block';
+            document.getElementById('pwaInstallBtn').style.display = 'none';
+            document.getElementById('iosPwaHint').style.display = 'block';
+        }
+
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/static/sw.js')
                 .then(reg => console.log('Service Worker Registered'))
@@ -1483,19 +1421,14 @@
         }
 
         window.addEventListener('beforeinstallprompt', (e) => {
-            // Prevent Chrome 67 and earlier from automatically showing the prompt
             e.preventDefault();
-            // Stash the event so it can be triggered later.
             deferredPrompt = e;
-            // Update UI to notify the user they can add to home screen
             document.getElementById('pwaInstallContainer').style.display = 'block';
         });
 
         document.getElementById('pwaInstallBtn').addEventListener('click', async () => {
             if (deferredPrompt !== null) {
-                // Show the install prompt
                 deferredPrompt.prompt();
-                // Wait for the user to respond to the prompt
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') {
                     document.getElementById('pwaInstallContainer').style.display = 'none';
@@ -1506,13 +1439,16 @@
         
         window.addEventListener('appinstalled', () => {
             document.getElementById('pwaInstallContainer').style.display = 'none';
-            console.log('PWA was installed');
         });
+
         // --- LIFECYCLE BOOT SEQUENCE (AWAIT E2EE) ---
         window.onload = async function() {
             if(window.location.pathname === "/dashboard") { 
-                await E2EE.init();
-                loadNetworkUsers();
+                await E2EE.init();          // 1. UNLOCK VAULT FIRST
+                setupSocketListeners();     // 2. CONNECT WEBSOCKET SECOND (Receives Decrypted History)
+                loadFeed();
+                loadInviteLedger();
+                loadEscrow();
                 initCryptoVault();
                 triggerWelcomeMessage();
                 setInterval(refreshLiveLightningBalance, 10000);
