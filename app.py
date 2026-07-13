@@ -9,6 +9,7 @@ import psycopg2
 import stripe
 import requests
 import uuid
+import boto3
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_cors import CORS
@@ -278,23 +279,40 @@ def logout():
 @app.route('/invite/generate', methods=['POST'])
 def generate_invite():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
-    new_key = "METRO-" + str(uuid.uuid4())[:8].upper()
+    
+    new_key = "METRO-" + os.urandom(4).hex().upper()
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("INSERT INTO invite_keys (key, creator) VALUES (%s, %s)", (new_key, session['username']))
-    conn.commit()
+    try:
+        # Inserting the username into both columns to satisfy strict database rules
+        cur.execute("""
+            INSERT INTO invite_keys (key, generated_by, creator, status) 
+            VALUES (%s, %s, %s, 'unused')
+        """, (new_key, session['username'], session['username']))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+        
     conn.close()
     return jsonify({'key': new_key})
 
-@app.route('/api/invites/ledger')
+@app.route('/api/invites/ledger', methods=['GET'])
 def get_invite_ledger():
-    if 'username' not in session: return jsonify([]), 401
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT key, status, used_by FROM invite_keys WHERE creator = %s ORDER BY id DESC", (session['username'],))
-    ledgers = [{'key': r[0], 'status': r[1], 'used_by': r[2]} for r in cur.fetchall()]
-    conn.close()
-    return jsonify(ledgers)
+    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # Query using the original generated_by column to ensure compatibility
+        cur.execute("SELECT key, status, used_by FROM invite_keys WHERE generated_by = %s", (session['username'],))
+        rows = cur.fetchall()
+        conn.close()
+        
+        keys = [{'key': r[0], 'status': r[1], 'used_by': r[2]} for r in rows]
+        return jsonify(keys)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/users')
 def api_users():
@@ -388,13 +406,40 @@ def api_profile(username):
 @app.route('/api/upload', methods=['POST'])
 def api_upload():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
-    if 'photo' not in request.files: return jsonify({'error': 'No file part'}), 400
+    if 'photo' not in request.files: return jsonify({'error': 'No file uploaded'}), 400
+    
     file = request.files['photo']
-    if file.filename == '': return jsonify({'error': 'No selected file'}), 400
-    if file:
-        filename = secure_filename(str(uuid.uuid4()) + "_" + file.filename)
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        return jsonify({'url': '/static/uploads/' + filename})
+    if file.filename == '': return jsonify({'error': 'No file selected'}), 400
+
+    try:
+        # Connect to your AWS Bucket
+        s3 = boto3.client(
+            's3',
+            region_name=os.getenv('AWS_REGION'),
+            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
+        )
+        bucket_name = os.getenv('AWS_STORAGE_BUCKET_NAME')
+        
+        # Generate a unique, secure filename
+        ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
+        filename = f"{uuid.uuid4().hex}_{session['username']}.{ext}"
+        
+        # Upload directly to S3
+        s3.upload_fileobj(
+            file,
+            bucket_name,
+            filename,
+            ExtraArgs={'ContentType': file.content_type}
+        )
+        
+        # Construct the permanent public URL
+        url = f"https://{bucket_name}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{filename}"
+        return jsonify({'url': url})
+        
+    except Exception as e:
+        print(f"AWS Upload Error: {e}")
+        return jsonify({'error': 'Failed to route image to secure storage.'}), 500
 
 
 # --- SOCIAL FEED & WALL ---

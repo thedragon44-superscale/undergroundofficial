@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0b1120">
-    <link rel="apple-touch-icon" href="/static/streetbook_logo.png">
+    <!-- Cache buster to force the phone to fetch the newly squared image -->
+    <link rel="apple-touch-icon" href="/static/streetbook_logo.png?v=2">
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://crypto-js.stripe.com/crypto-onramp-outer.js"></script>
     <style>
@@ -17,16 +18,15 @@
         * { box-sizing: border-box; }
         
         /* DECOUPLED OVERSIZED LOGO */
-        .detached-logo { position: absolute; top: -15px; left: -15px; width: 140px; height: 140px; z-index: 1050; object-fit: contain; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.8)) drop-shadow(0 0 15px rgba(56,189,248,0.3)); pointer-events: none; }
+        .detached-logo { position: absolute; top: 8px; left: 10px; width: 65px; height: 65px; z-index: 1050; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.8)); pointer-events: none; }
         
         /* HARD-LOCKED HEADER */
-        .header { background: #0f172a; padding: 12px 24px 12px 140px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 1000; flex-shrink: 0; height: 70px; }
-        .logo-text { font-size: 1.5rem; font-weight: 700; color: #38bdf8; letter-spacing: 0.05em; text-transform: uppercase; text-shadow: 0 0 15px rgba(56,189,248,0.4); margin: 0; }
-        .user-info { display: flex; align-items: center; gap: 15px; font-size: 0.9rem; }
-        .logout-btn { background: rgba(244, 63, 94, 0.1); color: #f43f5e; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; transition: all 0.2s; border: 1px solid rgba(244, 63, 94, 0.3); }
+        .header { background: #0f172a; padding: 12px 15px 12px 85px; display: flex; justify-content: flex-end; align-items: center; border-bottom: 1px solid #1e293b; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 1000; flex-shrink: 0; height: 65px; width: 100vw; box-sizing: border-box; }
+        .user-info { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; flex-wrap: nowrap; }
+        .logout-btn { background: rgba(244, 63, 94, 0.1); color: #f43f5e; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: 600; transition: all 0.2s; border: 1px solid rgba(244, 63, 94, 0.3); white-space: nowrap; flex-shrink: 0; }
         .logout-btn:hover { background: #f43f5e; color: white; box-shadow: 0 0 15px rgba(244, 63, 94, 0.4); }
 
-        .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }
+        .main-container { display: flex; flex: 1; overflow: hidden; position: relative; width: 100vw; }
         
         /* TABS */
         .tab-nav { width: 80px; background: #0f172a; display: flex; flex-direction: column; align-items: center; padding-top: 20px; gap: 20px; border-right: 1px solid #1e293b; z-index: 1000; flex-shrink: 0; }
@@ -35,12 +35,12 @@
         .tab-btn.active { background: #38bdf8; color: #0f172a; box-shadow: 0 0 20px rgba(56,189,248,0.4); border-color: #7dd3fc; }
 
         /* ISOLATED SCROLL CONTEXT */
-        .content-area { position: absolute; top: 0; left: 80px; right: 0; bottom: 0; background: #0b1120; overflow: hidden; }
-        .view-panel { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; }
+        .content-area { position: absolute; top: 0; left: 80px; right: 0; bottom: 0; background: #0b1120; overflow-x: hidden; overflow-y: hidden; }
+        .view-panel { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding: 20px; width: 100%; box-sizing: border-box; }
         .view-panel.active { display: block; }
         
         .two-pane-layout { display: flex; height: 100%; width: 100%; padding: 0; overflow: hidden; }
-        .sidebar { width: 320px; background: #0f172a; border-right: 1px solid #1e293b; display: flex; flex-direction: column; z-index: 5; height: 100%; }
+        .sidebar { width: 320px; background: #0f172a; border-right: 1px solid #1e293b; display: flex; flex-direction: column; z-index: 5; height: 100%; flex-shrink: 0; }
         .sidebar-header { padding: 20px; border-bottom: 1px solid #1e293b; background: rgba(15, 23, 42, 0.95); flex-shrink: 0; }
         .sidebar-search { width: 100%; background: #1e293b; border: 1px solid #334155; color: white; padding: 10px 15px; border-radius: 8px; outline: none; margin-bottom: 15px; }
         .sidebar-search:focus { border-color: #38bdf8; }
@@ -49,37 +49,37 @@
         .mode-btn { flex: 1; padding: 8px; text-align: center; font-size: 0.85rem; font-weight: 600; color: #94a3b8; cursor: pointer; transition: all 0.2s; }
         .mode-btn.active { background: #38bdf8; color: #0f172a; }
 
-        .inbox-list { flex: 1; overflow-y: auto; padding: 10px; }
+        .inbox-list { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 10px; }
         .inbox-card { display: flex; align-items: center; padding: 12px 15px; border-radius: 8px; cursor: pointer; transition: all 0.2s; margin-bottom: 5px; background: rgba(30, 41, 59, 0.3); border: 1px solid transparent; }
         .inbox-card:hover { background: #1e293b; border-color: rgba(56,189,248,0.2); }
         .inbox-card.active { background: #1e293b; border-left: 4px solid #38bdf8; }
-        .avatar-sm { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 15px; border: 2px solid #334155; }
+        .avatar-sm { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 15px; border: 2px solid #334155; flex-shrink: 0; }
         
         /* CHAT LAYOUT */
-        .chat-container { flex: 1; display: flex; flex-direction: column; background: #0b1120; position: relative; height: 100%; }
-        .chat-header { padding: 20px; border-bottom: 1px solid #1e293b; background: rgba(15, 23, 42, 0.9); display: flex; justify-content: space-between; align-items: center; z-index: 2; flex-shrink: 0; }
-        .chat-target-name { font-size: 1.2rem; font-weight: 600; color: #f8fafc; }
-        .e2ee-badge { display: none; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #10b981; background: rgba(16,185,129,0.1); padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(16,185,129,0.3); text-transform: uppercase; letter-spacing: 0.05em; }
+        .chat-container { flex: 1; display: flex; flex-direction: column; background: #0b1120; position: relative; height: 100%; min-width: 0; width: 100%; overflow-x: hidden; box-sizing: border-box; }
+        .chat-header { padding: 15px 20px; border-bottom: 1px solid #1e293b; background: rgba(15, 23, 42, 0.9); display: flex; justify-content: space-between; align-items: center; z-index: 2; flex-shrink: 0; }
+        .chat-target-name { font-size: 1.1rem; font-weight: 600; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .e2ee-badge { display: none; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #10b981; background: rgba(16,185,129,0.1); padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(16,185,129,0.3); text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
         .e2ee-badge.active { display: flex; }
         .e2ee-badge::before { content: ""; width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; }
 
-        .chat-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; }
-        .msg-row { display: flex; flex-direction: column; max-width: 80%; }
+        .chat-area { flex: 1; padding: 15px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; width: 100%; box-sizing: border-box; }
+        .msg-row { display: flex; flex-direction: column; max-width: 90%; }
         .msg-row.me { align-self: flex-end; align-items: flex-end; }
         .msg-row.others { align-self: flex-start; align-items: flex-start; }
         .msg-username { font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; padding: 0 4px; cursor: pointer; }
         .msg-username:hover { color: #38bdf8; text-decoration: underline; }
         
-        .bubble { padding: 12px 16px; border-radius: 12px; font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .bubble { padding: 10px 14px; border-radius: 12px; font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
         .msg-row.me .bubble { background: #38bdf8; color: #0f172a; border-bottom-right-radius: 2px; }
         .msg-row.others .bubble { background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-bottom-left-radius: 2px; }
         .chat-image { max-width: 100%; border-radius: 8px; margin-top: 5px; cursor: pointer; }
         
-        .footer-input { padding: 15px 20px; background: #0f172a; border-top: 1px solid #1e293b; display: flex; gap: 10px; align-items: center; z-index: 2; flex-shrink: 0; }
-        .footer-input textarea { flex: 1; background: #1e293b; border: 1px solid #334155; color: white; padding: 12px 20px; border-radius: 20px; outline: none; font-size: 0.95rem; font-family: inherit; resize: none; overflow-y: auto; max-height: 120px; min-height: 45px; }
+        .footer-input { padding: 10px 15px; background: #0f172a; border-top: 1px solid #1e293b; display: flex; gap: 8px; align-items: center; z-index: 2; flex-shrink: 0; width: 100%; box-sizing: border-box; }
+        .footer-input textarea { flex: 1; background: #1e293b; border: 1px solid #334155; color: white; padding: 10px 15px; border-radius: 20px; outline: none; font-size: 0.95rem; font-family: inherit; resize: none; overflow-y: auto; max-height: 100px; min-height: 40px; }
         .footer-input textarea:focus { border-color: #38bdf8; box-shadow: 0 0 15px rgba(56,189,248,0.1); }
         
-        .action-btn { flex-shrink: 0; background: #1e293b; border: 1px solid #334155; color: #cbd5e1; width: 45px; height: 45px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: all 0.2s; font-size: 1.2rem; }
+        .action-btn { flex-shrink: 0; background: #1e293b; border: 1px solid #334155; color: #cbd5e1; width: 40px; height: 40px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: all 0.2s; font-size: 1.1rem; }
         .action-btn:hover { background: #334155; color: white; transform: translateY(-2px); }
         .action-btn.primary { background: #38bdf8; color: #0f172a; border: none; }
         .action-btn.primary:hover { background: #0ea5e9; box-shadow: 0 4px 15px rgba(56,189,248,0.4); }
@@ -90,7 +90,7 @@
         .panel-btn:hover { background: #334155; border-color: #475569; }
         .panel-btn.primary { background: #38bdf8; color: #0f172a; border: none; }
         .panel-btn.primary:hover { background: #0ea5e9; color: white; }
-        .panel-input { width: 100%; background: #1e293b; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; outline: none; margin-bottom: 15px; }
+        .panel-input { width: 100%; background: #1e293b; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; outline: none; margin-bottom: 15px; box-sizing: border-box; }
         .panel-input:focus { border-color: #38bdf8; }
 
         .suggestion-menu { position: absolute; bottom: 100%; left: 0; background: #1e293b; border: 1px solid #334155; border-radius: 8px; width: 250px; max-height: 200px; overflow-y: auto; display: none; flex-direction: column; z-index: 100; margin-bottom: 10px; }
@@ -98,19 +98,20 @@
         .suggest-row:hover, .suggest-row.selected { background: rgba(56,189,248,0.1); color: #38bdf8; }
         .mention-link { color: #38bdf8; font-weight: 600; cursor: pointer; background: rgba(56,189,248,0.1); padding: 2px 6px; border-radius: 4px; }
 
-        .feed-post { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-        .feed-post-header { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 15px; }
-        .feed-avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #334155; cursor: pointer; flex-shrink: 0; }
-        .feed-content-area { flex: 1; min-width: 0; }
+        .feed-post { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); overflow: hidden; }
+        .feed-post-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+        .feed-avatar { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 2px solid #334155; cursor: pointer; flex-shrink: 0; }
+        .feed-content-area { flex: 1; min-width: 0; overflow: hidden; }
         .feed-user { font-weight: 700; color: #38bdf8; cursor: pointer; display: inline-block; margin-bottom: 5px; }
-        .feed-body { color: #e2e8f0; line-height: 1.6; white-space: pre-wrap; word-break: break-word; font-size: 0.95rem; }
-        .feed-attached-img { max-width: 100%; border-radius: 8px; margin-top: 15px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
+        .feed-body { color: #e2e8f0; line-height: 1.5; white-space: pre-wrap; word-break: break-word; font-size: 0.95rem; }
+        .feed-attached-img { max-width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
         
-        .social-engagement-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px; justify-content: space-between; }
-        .feedback-chip { display: flex; flex: 1; min-width: 75px; justify-content: center; align-items: center; gap: 6px; background: rgba(30, 41, 59, 0.5); padding: 8px 10px; border-radius: 8px; font-size: 0.8rem; color: #94a3b8; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; white-space: nowrap; }
+        /* SHRINKED ENGAGEMENT BUTTONS */
+        .social-engagement-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px; justify-content: flex-start; }
+        .feedback-chip { display: flex; flex: 0 1 auto; justify-content: center; align-items: center; gap: 4px; background: rgba(30, 41, 59, 0.5); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; color: #94a3b8; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; white-space: nowrap; }
         .feedback-chip:hover { background: rgba(56,189,248,0.1); color: #38bdf8; border-color: rgba(56,189,248,0.3); }
         
-        .nested-comment-matrix { margin-top: 15px; padding-left: 10px; border-left: 2px solid #334155; display: none; }
+        .nested-comment-matrix { margin-top: 10px; padding-left: 10px; border-left: 2px solid #334155; display: none; }
         .nested-comment-matrix.expanded { display: block; }
         .comment-node { background: rgba(0,0,0,0.2); padding: 10px 15px; border-radius: 8px; margin-bottom: 8px; font-size: 0.85rem; color: #cbd5e1; }
         
@@ -127,34 +128,32 @@
         .lightbox-close { position: absolute; top: 20px; right: 30px; font-size: 2rem; color: white; cursor: pointer; width: 50px; height: 50px; display: flex; justify-content: center; align-items: center; border-radius: 50%; }
 
         .custom-dialog-overlay { display: none; position: fixed; inset: 0; background: rgba(4, 6, 10, 0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(10px); }
-        .custom-dialog-box { background: #0f172a; border: 1px solid rgba(56,189,248,0.3); border-radius: 12px; padding: 30px; width: 90%; max-width: 400px; text-align: center; }
+        .custom-dialog-box { background: #0f172a; border: 1px solid rgba(56,189,248,0.3); border-radius: 12px; padding: 25px; width: 90%; max-width: 350px; text-align: center; }
         .custom-dialog-title { color: #38bdf8; font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; }
         .custom-dialog-body { color: #e2e8f0; font-size: 0.95rem; line-height: 1.6; margin-bottom: 25px; white-space: pre-wrap; word-wrap: break-word; }
 
         /* THE TRUE HARD-LOCKED MOBILE MATRIX */
         @media (max-width: 768px) {
-            .detached-logo { top: -5px; left: -5px; width: 85px; height: 85px; }
-            .header { padding-left: 90px; }
-            .logo-text { display: none; }
+            .detached-logo { top: 5px; left: 5px; width: 55px; height: 55px; }
+            .header { padding: 10px 15px 10px 70px; height: 60px; }
             
             /* TABS LOCKED TO BOTTOM */
-            .tab-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: 70px; flex-direction: row; padding: 0 10px; box-sizing: border-box; justify-content: space-evenly; border-right: none; border-top: 1px solid #1e293b; z-index: 9999; }
+            .tab-nav { position: fixed; bottom: 0; left: 0; width: 100vw; height: 65px; flex-direction: row; padding: 0; box-sizing: border-box; justify-content: space-evenly; border-right: none; border-top: 1px solid #1e293b; z-index: 9999; }
             .tab-btn { width: 45px; height: 45px; }
             
-            /* CONTENT AREA STOPS AT TABS */
-            .content-area { left: 0; bottom: 70px; }
-            .view-panel { padding: 15px; padding-bottom: 20px; }
+            /* CONTENT AREA STOPS AT TABS AND HAS NO X SCROLL */
+            .content-area { left: 0; bottom: 65px; width: 100vw; overflow-x: hidden; }
+            .view-panel { padding: 10px; overflow-x: hidden; width: 100vw; }
             
             /* CHAT SPECIFICS */
             .two-pane-layout { flex-direction: column; }
             .sidebar { width: 100%; border-right: none; }
-            .chat-container { display: none; }
+            .chat-container { display: none; width: 100vw; }
             .chat-container.show-chat { display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 20; background: #0b1120; }
-            #mobileBackBtn { display: flex !important; }
+            #mobileBackBtn { display: flex !important; margin-right: 5px; }
             
-            .msg-row { max-width: 90%; }
+            .msg-row { max-width: 95%; }
             .pool-drawer { width: 85%; }
-            .footer-input { padding: 10px; }
         }
     </style>
 </head>
@@ -181,20 +180,15 @@
         <img src="" id="lightboxTargetSrc" class="lightbox-img">
     </div>
 
-    <!-- TOP HEADER BAR WITH DETACHED LOGO -->
-    <img src="/static/streetbook_logo.png" class="detached-logo" onerror="this.style.display='none'">
+    <!-- TOP HEADER BAR WITH DETACHED LOGO (sb.png) & REMOVED ENCRYPTION TEXT -->
+    <img src="/static/sb.png" class="detached-logo" onerror="this.style.display='none'">
     <div class="header">
-        <div class="logo-container">
-            <div class="logo-text">StreetBook Hub</div>
-        </div>
         <div class="user-info">
-            <span style="color:#94a3b8; font-family:monospace; font-size:0.8rem; display:none;" id="e2eeKeyStatusDisplay">[CHECKING KEYS...]</span>
             <span style="font-weight:700; color:#f8fafc; font-size:1.1rem; border-right:1px solid #334155; padding-right:15px;">@{{ username }}</span>
             <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
         </div>
     </div>
-
-    <!-- MAIN INTERFACE CONTAINER -->
+<!-- MAIN INTERFACE CONTAINER -->
     <div class="main-container">
         
         <!-- SIDE NAVIGATION TABS -->
@@ -228,7 +222,7 @@
                     
                     <div class="chat-container" id="dmContainer">
                         <div class="chat-header">
-                            <div style="display:flex; align-items:center; gap:15px;">
+                            <div style="display:flex; align-items:center; gap:15px; min-width:0;">
                                 <button class="action-btn" id="mobileBackBtn" onclick="closeDMChannel()">←</button>
                                 <div class="chat-target-name" id="chatTargetText">Select a chat to begin...</div>
                                 <div class="e2ee-badge" id="e2eeBadge">🔒 ENCRYPTED</div>
@@ -288,7 +282,8 @@
                     <div id="feedContainer"></div>
                 </div>
             </div>
-<!-- PROFILE WALL PANEL -->
+
+            <!-- PROFILE WALL PANEL -->
             <div id="profilePanel" class="view-panel">
                 <div style="max-width: 600px; margin: 0 auto; background:rgba(15, 23, 42, 0.6); padding:30px; border-radius:12px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
                     <div style="position:relative; display:inline-block;">
@@ -316,7 +311,7 @@
                 <!-- COLLAPSIBLE QUICK START GUIDE -->
                 <details style="background:rgba(30, 41, 59, 0.4); padding:15px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); margin-bottom:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); cursor:pointer;">
                     <summary style="font-size:1.1rem; font-weight:600; color:#f8fafc; outline:none; display:flex; align-items:center; gap:10px;">
-                        <span style="color:#38bdf8;">📖</span> Quick Start & Security Guide (Tap to Expand)
+                        <span style="color:#38bdf8;">📖</span> Quick Start & Security Guide <span style="margin-left:auto; color:#94a3b8; font-size:0.8rem;">🔽</span>
                     </summary>
                     <div style="margin-top:15px; font-size:0.9rem; color:#cbd5e1; line-height:1.6; cursor:default;">
                         <b>1. Total Encryption:</b> StreetBook utilizes True End-to-End Encryption (E2EE) built directly into your browser via WebCrypto. Your messages are encrypted <i>before</i> they leave your device using a master key locked by your Vault Password. The central servers literally cannot read your Private Messages or Gang Chats. Ever.<br><br>
@@ -378,8 +373,7 @@
             
         </div>
     </div>
-
-    <script>
+<script>
         // === ASYNC NON-BLOCKING UI PROMISE DIALOG INTERCEPTORS ===
         function customAlert(message, title = "SYSTEM NOTICE") {
             return new Promise((resolve) => {
@@ -568,7 +562,8 @@
                 statusDisplay.style.color = "#10b981";
                 statusDisplay.style.display = "inline-block";
             },
-fetchTargetKey: async function(username) {
+
+            fetchTargetKey: async function(username) {
                 if (this.publicKeyCache[username]) return this.publicKeyCache[username];
                 const res = await fetch('/api/crypto/public_key/' + username);
                 if (!res.ok) return null;
