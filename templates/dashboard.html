@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0b1120">
-    <!-- Cache buster to force the phone to fetch the newly squared image -->
-    <link rel="apple-touch-icon" href="/static/streetbook_logo.png?v=2">
+    <!-- Pointing to your perfectly squared image to prevent distortion -->
+    <link rel="apple-touch-icon" href="/static/streetbook_logo_2.png">
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://crypto-js.stripe.com/crypto-onramp-outer.js"></script>
     <style>
@@ -106,7 +106,7 @@
         .feed-body { color: #e2e8f0; line-height: 1.5; white-space: pre-wrap; word-break: break-word; font-size: 0.95rem; }
         .feed-attached-img { max-width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
         
-        /* SHRINKED ENGAGEMENT BUTTONS */
+        /* COMPACT ENGAGEMENT BUTTONS */
         .social-engagement-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px; justify-content: flex-start; }
         .feedback-chip { display: flex; flex: 0 1 auto; justify-content: center; align-items: center; gap: 4px; background: rgba(30, 41, 59, 0.5); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; color: #94a3b8; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; white-space: nowrap; }
         .feedback-chip:hover { background: rgba(56,189,248,0.1); color: #38bdf8; border-color: rgba(56,189,248,0.3); }
@@ -180,7 +180,7 @@
         <img src="" id="lightboxTargetSrc" class="lightbox-img">
     </div>
 
-    <!-- TOP HEADER BAR WITH DETACHED LOGO (sb.png) & REMOVED ENCRYPTION TEXT -->
+    <!-- TOP HEADER BAR WITH DETACHED LOGO (sb.png) -->
     <img src="/static/sb.png" class="detached-logo" onerror="this.style.display='none'">
     <div class="header">
         <div class="user-info">
@@ -311,7 +311,7 @@
                 <!-- COLLAPSIBLE QUICK START GUIDE -->
                 <details style="background:rgba(30, 41, 59, 0.4); padding:15px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); margin-bottom:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); cursor:pointer;">
                     <summary style="font-size:1.1rem; font-weight:600; color:#f8fafc; outline:none; display:flex; align-items:center; gap:10px;">
-                        <span style="color:#38bdf8;">📖</span> Quick Start & Security Guide <span style="margin-left:auto; color:#94a3b8; font-size:0.8rem;">🔽</span>
+                        <span style="color:#38bdf8;">📖</span> Quick Start & Security Guide <span style="font-size:0.8rem; font-weight:400; color:#94a3b8;">(Click to expand)</span> <span style="margin-left:auto; color:#94a3b8; font-size:0.8rem;">🔽</span>
                     </summary>
                     <div style="margin-top:15px; font-size:0.9rem; color:#cbd5e1; line-height:1.6; cursor:default;">
                         <b>1. Total Encryption:</b> StreetBook utilizes True End-to-End Encryption (E2EE) built directly into your browser via WebCrypto. Your messages are encrypted <i>before</i> they leave your device using a master key locked by your Vault Password. The central servers literally cannot read your Private Messages or Gang Chats. Ever.<br><br>
@@ -461,6 +461,7 @@
         let onlineUsersList = [];
         let typingTimeout = null;
         let userLightningWalletId = "";
+        let mintTimerInterval;
 
         // --- TRUE END-TO-END ENCRYPTION (E2EE) WEBCRYPTO ENGINE ---
         const E2EE = {
@@ -1146,7 +1147,13 @@
                 const controls = document.getElementById('profControls'); controls.innerHTML = '';
                 const wallForm = document.getElementById('profileWallPostFormContainer');
                 
-                if(data.invited_by) { controls.innerHTML += '<div style="font-size:0.85rem; color:#94a3b8;">Invited by: <span class="mention-link" onclick="openProfile(\'' + data.invited_by + '\')">@' + data.invited_by + '</span></div>'; }
+                if(data.invited_by) { 
+                    if(data.invited_by.toLowerCase() === 'system') {
+                        controls.innerHTML += '<div style="font-size:0.85rem; color:#94a3b8; font-style:italic;">Origin: System Genesis</div>';
+                    } else {
+                        controls.innerHTML += '<div style="font-size:0.85rem; color:#94a3b8;">Invited by: <span class="mention-link" onclick="openProfile(\'' + data.invited_by + '\')">@' + data.invited_by + '</span></div>'; 
+                    }
+                }
                 if(data.username === currentUser) {
                     controls.innerHTML += '<div style="display:flex; gap:10px; width:100%;"><input type="text" id="newBio" class="panel-input" style="margin-bottom:0;" placeholder="Update bio..."><button class="panel-btn primary" onclick="updateBio()">Save</button></div>';
                     wallForm.innerHTML = '<div style="display:flex; gap:10px; align-items:center; background:rgba(30, 41, 59, 0.5); padding:10px; border-radius:12px;">' +
@@ -1268,7 +1275,7 @@
             fetch('/api/stripe/checkout', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ amount: amount, id: txId }) }).then(res => res.json()).then(data => window.location.href = data.url); 
         }
         
-        // --- SAFE MINT KEY FIX ---
+        // --- SAFE MINT KEY FIX WITH TIMER ---
         function safeGenerateInvite() { 
             fetch('/invite/generate', { method: 'POST' })
             .then(res => res.json())
@@ -1276,11 +1283,29 @@
                 if(data.error) {
                     customAlert(data.error, "MINTING FAILED");
                 } else {
-                    document.getElementById('inviteDisplay').innerText = data.key; 
+                    clearInterval(mintTimerInterval);
+                    const display = document.getElementById('inviteDisplay');
+                    const expireTime = new Date(data.expires_at).getTime();
+                    
+                    mintTimerInterval = setInterval(() => {
+                        const now = new Date().getTime();
+                        const distance = expireTime - now;
+                        
+                        if (distance <= 0) {
+                            clearInterval(mintTimerInterval);
+                            display.innerHTML = '<span style="text-decoration:line-through; color:#94a3b8;">' + data.key + '</span><br><span style="color:#f87171; font-size:0.8rem; font-weight:700;">[EXPIRED]</span>';
+                            loadInviteLedger();
+                        } else {
+                            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                            display.innerHTML = data.key + '<br><span style="color:#f43f5e; font-size:0.85rem;">⏱️ Expires in ' + minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0') + '</span>';
+                        }
+                    }, 1000);
+                    
                     loadInviteLedger();
                 }
             })
-            .catch(err => customAlert("Network error while minting key. Make sure your database is connected.", "ERROR"));
+            .catch(err => customAlert("Network error while minting key.", "ERROR"));
         }
         
         function loadInviteLedger() {

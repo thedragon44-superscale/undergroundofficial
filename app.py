@@ -14,6 +14,8 @@ from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_cors import CORS
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
+from werkzeug.security import generate_password_hash
 
 load_dotenv()
 
@@ -187,7 +189,46 @@ def init_db():
 
     conn.close()
     
+def init_master_admin():
+    admin_user = os.getenv('ADMIN_USERNAME')
+    admin_pass = os.getenv('ADMIN_PASSWORD')
+    if not admin_user or not admin_pass:
+        return
 
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM users WHERE username = %s", (admin_user,))
+    if not cur.fetchone():
+        # Provision LNbits Wallet for Admin
+        wallet_id = None
+        try:
+            ln_url = os.getenv('LNBITS_URL')
+            ln_key = os.getenv('LNBITS_ADMIN_KEY') # Adjust if your env var is named differently
+            if ln_url and ln_key:
+                # Basic LNbits wallet creation call (adjust endpoint if using UserManager extension)
+                res = requests.post(
+                    f"{ln_url}/api/v1/wallet",
+                    headers={"X-Api-Key": ln_key},
+                    json={"name": f"{admin_user}_master_vault"},
+                    timeout=5
+                )
+                if res.status_code in [200, 201]:
+                    wallet_id = res.json().get('id')
+        except Exception as e:
+            print(f"Admin LNbits provisioning failed: {e}")
+
+        hashed_pw = generate_password_hash(admin_pass)
+        cur.execute("""
+            INSERT INTO users (username, password_hash, ln_wallet_id) 
+            VALUES (%s, %s, %s)
+        """, (admin_user, hashed_pw, wallet_id))
+        conn.commit()
+        print(f"[*] Master Admin '{admin_user}' Auto-Provisioned.")
+    conn.close()
+
+# Example of where to call it at the bottom of your file:
+# with app.app_context():
+#     init_master_admin()
 # --- AUTHENTICATION & ACCESS CONTROL ---
 
 @app.route('/')
@@ -281,14 +322,15 @@ def generate_invite():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     
     new_key = "METRO-" + os.urandom(4).hex().upper()
+    expires = datetime.utcnow() + timedelta(minutes=5)
+    
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        # Inserting the username into both columns to satisfy strict database rules
         cur.execute("""
-            INSERT INTO invite_keys (key, generated_by, creator, status) 
-            VALUES (%s, %s, %s, 'unused')
-        """, (new_key, session['username'], session['username']))
+            INSERT INTO invite_keys (key, generated_by, creator, status, expires_at) 
+            VALUES (%s, %s, %s, 'unused', %s)
+        """, (new_key, session['username'], session['username'], expires))
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -296,7 +338,8 @@ def generate_invite():
         return jsonify({'error': str(e)}), 500
         
     conn.close()
-    return jsonify({'key': new_key})
+    # Sending the ISO format back so JavaScript can run the live 5:00 countdown
+    return jsonify({'key': new_key, 'expires_at': expires.isoformat() + 'Z'})
 
 @app.route('/api/invites/ledger', methods=['GET'])
 def get_invite_ledger():
