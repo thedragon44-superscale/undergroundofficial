@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>StreetBook Hub</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0b1120">
     <link rel="apple-touch-icon" href="/static/streetbook_logo.png">
@@ -12,15 +12,16 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         
-        body { margin: 0; font-family: 'Inter', sans-serif; background: #0b1120; color: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        /* HARD-LOCKED NATIVE SCROLL MATRIX */
+        body { margin: 0; font-family: 'Inter', sans-serif; background: #0b1120; color: #f8fafc; height: 100dvh; width: 100vw; display: flex; flex-direction: column; overflow: hidden; }
         * { box-sizing: border-box; }
         
-        /* HEADER & LOGO FIXES */
-        .header { background: #0f172a; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 20; position: relative; }
-        .logo-container { display: flex; align-items: center; gap: 15px; }
-        .logo-img { height: 45px; width: 45px; border-radius: 8px; object-fit: contain; filter: drop-shadow(0 0 10px rgba(56,189,248,0.3)); }
-        .logo-text { font-size: 1.5rem; font-weight: 700; color: #38bdf8; letter-spacing: 0.05em; text-transform: uppercase; text-shadow: 0 0 15px rgba(56,189,248,0.4); margin: 0; }
+        /* DECOUPLED OVERSIZED LOGO */
+        .detached-logo { position: absolute; top: -15px; left: -15px; width: 140px; height: 140px; z-index: 1050; object-fit: contain; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.8)) drop-shadow(0 0 15px rgba(56,189,248,0.3)); pointer-events: none; }
         
+        /* HARD-LOCKED HEADER */
+        .header { background: #0f172a; padding: 12px 24px 12px 140px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 1000; flex-shrink: 0; height: 70px; }
+        .logo-text { font-size: 1.5rem; font-weight: 700; color: #38bdf8; letter-spacing: 0.05em; text-transform: uppercase; text-shadow: 0 0 15px rgba(56,189,248,0.4); margin: 0; }
         .user-info { display: flex; align-items: center; gap: 15px; font-size: 0.9rem; }
         .logout-btn { background: rgba(244, 63, 94, 0.1); color: #f43f5e; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; transition: all 0.2s; border: 1px solid rgba(244, 63, 94, 0.3); }
         .logout-btn:hover { background: #f43f5e; color: white; box-shadow: 0 0 15px rgba(244, 63, 94, 0.4); }
@@ -28,18 +29,19 @@
         .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }
         
         /* TABS */
-        .tab-nav { width: 80px; background: #0f172a; display: flex; flex-direction: column; align-items: center; padding-top: 20px; gap: 20px; border-right: 1px solid #1e293b; z-index: 10; }
+        .tab-nav { width: 80px; background: #0f172a; display: flex; flex-direction: column; align-items: center; padding-top: 20px; gap: 20px; border-right: 1px solid #1e293b; z-index: 1000; flex-shrink: 0; }
         .tab-btn { width: 50px; height: 50px; border-radius: 12px; background: rgba(30, 41, 59, 0.5); color: #94a3b8; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
         .tab-btn:hover { background: #1e293b; color: #38bdf8; }
         .tab-btn.active { background: #38bdf8; color: #0f172a; box-shadow: 0 0 20px rgba(56,189,248,0.4); border-color: #7dd3fc; }
 
-        .content-area { flex: 1; position: relative; background: #0b1120; overflow: hidden; }
-        .view-panel { display: none; width: 100%; height: 100%; overflow-y: auto; padding: 20px; }
+        /* ISOLATED SCROLL CONTEXT */
+        .content-area { position: absolute; top: 0; left: 80px; right: 0; bottom: 0; background: #0b1120; overflow: hidden; }
+        .view-panel { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; }
         .view-panel.active { display: block; }
         
         .two-pane-layout { display: flex; height: 100%; width: 100%; padding: 0; overflow: hidden; }
-        .sidebar { width: 320px; background: #0f172a; border-right: 1px solid #1e293b; display: flex; flex-direction: column; z-index: 5; }
-        .sidebar-header { padding: 20px; border-bottom: 1px solid #1e293b; background: rgba(15, 23, 42, 0.95); }
+        .sidebar { width: 320px; background: #0f172a; border-right: 1px solid #1e293b; display: flex; flex-direction: column; z-index: 5; height: 100%; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #1e293b; background: rgba(15, 23, 42, 0.95); flex-shrink: 0; }
         .sidebar-search { width: 100%; background: #1e293b; border: 1px solid #334155; color: white; padding: 10px 15px; border-radius: 8px; outline: none; margin-bottom: 15px; }
         .sidebar-search:focus { border-color: #38bdf8; }
         
@@ -53,11 +55,10 @@
         .inbox-card.active { background: #1e293b; border-left: 4px solid #38bdf8; }
         .avatar-sm { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 15px; border: 2px solid #334155; }
         
-        /* CHAT LAYOUT & TEXTAREA */
-        .chat-container { flex: 1; display: flex; flex-direction: column; background: #0b1120; position: relative; }
-        .chat-header { padding: 20px; border-bottom: 1px solid #1e293b; background: rgba(15, 23, 42, 0.9); display: flex; justify-content: space-between; align-items: center; z-index: 2; backdrop-filter: blur(10px); }
+        /* CHAT LAYOUT */
+        .chat-container { flex: 1; display: flex; flex-direction: column; background: #0b1120; position: relative; height: 100%; }
+        .chat-header { padding: 20px; border-bottom: 1px solid #1e293b; background: rgba(15, 23, 42, 0.9); display: flex; justify-content: space-between; align-items: center; z-index: 2; flex-shrink: 0; }
         .chat-target-name { font-size: 1.2rem; font-weight: 600; color: #f8fafc; }
-        
         .e2ee-badge { display: none; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #10b981; background: rgba(16,185,129,0.1); padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(16,185,129,0.3); text-transform: uppercase; letter-spacing: 0.05em; }
         .e2ee-badge.active { display: flex; }
         .e2ee-badge::before { content: ""; width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; }
@@ -66,7 +67,7 @@
         .msg-row { display: flex; flex-direction: column; max-width: 80%; }
         .msg-row.me { align-self: flex-end; align-items: flex-end; }
         .msg-row.others { align-self: flex-start; align-items: flex-start; }
-        .msg-username { font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; padding: 0 4px; cursor: pointer; transition: color 0.2s; }
+        .msg-username { font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; padding: 0 4px; cursor: pointer; }
         .msg-username:hover { color: #38bdf8; text-decoration: underline; }
         
         .bubble { padding: 12px 16px; border-radius: 12px; font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
@@ -74,8 +75,8 @@
         .msg-row.others .bubble { background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-bottom-left-radius: 2px; }
         .chat-image { max-width: 100%; border-radius: 8px; margin-top: 5px; cursor: pointer; }
         
-        .footer-input { padding: 20px; background: #0f172a; border-top: 1px solid #1e293b; display: flex; gap: 10px; align-items: center; z-index: 2; position: relative; }
-        .footer-input textarea { flex: 1; background: #1e293b; border: 1px solid #334155; color: white; padding: 12px 20px; border-radius: 20px; outline: none; font-size: 0.95rem; font-family: inherit; resize: none; overflow-y: auto; max-height: 120px; }
+        .footer-input { padding: 15px 20px; background: #0f172a; border-top: 1px solid #1e293b; display: flex; gap: 10px; align-items: center; z-index: 2; flex-shrink: 0; }
+        .footer-input textarea { flex: 1; background: #1e293b; border: 1px solid #334155; color: white; padding: 12px 20px; border-radius: 20px; outline: none; font-size: 0.95rem; font-family: inherit; resize: none; overflow-y: auto; max-height: 120px; min-height: 45px; }
         .footer-input textarea:focus { border-color: #38bdf8; box-shadow: 0 0 15px rgba(56,189,248,0.1); }
         
         .action-btn { flex-shrink: 0; background: #1e293b; border: 1px solid #334155; color: #cbd5e1; width: 45px; height: 45px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: all 0.2s; font-size: 1.2rem; }
@@ -84,7 +85,7 @@
         .action-btn.primary:hover { background: #0ea5e9; box-shadow: 0 4px 15px rgba(56,189,248,0.4); }
         #mobileBackBtn { display: none; }
 
-        /* PANELS & BUTTONS */
+        /* PANELS & FEED POSTS */
         .panel-btn { background: #1e293b; color: #f8fafc; border: 1px solid #334155; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s; text-align: center; }
         .panel-btn:hover { background: #334155; border-color: #475569; }
         .panel-btn.primary { background: #38bdf8; color: #0f172a; border: none; }
@@ -97,30 +98,28 @@
         .suggest-row:hover, .suggest-row.selected { background: rgba(56,189,248,0.1); color: #38bdf8; }
         .mention-link { color: #38bdf8; font-weight: 600; cursor: pointer; background: rgba(56,189,248,0.1); padding: 2px 6px; border-radius: 4px; }
 
-        /* FEED POSTS & SOCIAL ENGAGEMENT */
         .feed-post { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
         .feed-post-header { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 15px; }
-        .feed-avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #334155; cursor: pointer; }
+        .feed-avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #334155; cursor: pointer; flex-shrink: 0; }
         .feed-content-area { flex: 1; min-width: 0; }
         .feed-user { font-weight: 700; color: #38bdf8; cursor: pointer; display: inline-block; margin-bottom: 5px; }
         .feed-body { color: #e2e8f0; line-height: 1.6; white-space: pre-wrap; word-break: break-word; font-size: 0.95rem; }
         .feed-attached-img { max-width: 100%; border-radius: 8px; margin-top: 15px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
         
         .social-engagement-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px; justify-content: space-between; }
-        .feedback-chip { display: flex; flex: 1; min-width: 80px; justify-content: center; align-items: center; gap: 6px; background: rgba(30, 41, 59, 0.5); padding: 8px 10px; border-radius: 8px; font-size: 0.8rem; color: #94a3b8; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; white-space: nowrap; }
+        .feedback-chip { display: flex; flex: 1; min-width: 75px; justify-content: center; align-items: center; gap: 6px; background: rgba(30, 41, 59, 0.5); padding: 8px 10px; border-radius: 8px; font-size: 0.8rem; color: #94a3b8; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; white-space: nowrap; }
         .feedback-chip:hover { background: rgba(56,189,248,0.1); color: #38bdf8; border-color: rgba(56,189,248,0.3); }
         
-        .nested-comment-matrix { margin-top: 15px; padding-left: 20px; border-left: 2px solid #334155; display: none; }
+        .nested-comment-matrix { margin-top: 15px; padding-left: 10px; border-left: 2px solid #334155; display: none; }
         .nested-comment-matrix.expanded { display: block; }
         .comment-node { background: rgba(0,0,0,0.2); padding: 10px 15px; border-radius: 8px; margin-bottom: 8px; font-size: 0.85rem; color: #cbd5e1; }
         
-        /* FINANCIAL & MISC */
-        .pool-drawer { position: absolute; right: -350px; top: 0; width: 350px; height: 100%; background: #0f172a; border-left: 1px solid #1e293b; z-index: 10; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 20px; overflow-y: auto; box-shadow: -10px 0 30px rgba(0,0,0,0.5); }
+        /* MISC UI */
+        .pool-drawer { position: absolute; right: -350px; top: 0; width: 350px; height: 100%; background: #0f172a; border-left: 1px solid #1e293b; z-index: 50; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 20px; overflow-y: auto; box-shadow: -10px 0 30px rgba(0,0,0,0.5); }
         .pool-drawer.visible { right: 0; }
         .pool-card-item { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 10px; font-size: 0.9rem; }
-        .inline-invoice-card { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56,189,248,0.3); padding: 15px; border-radius: 8px; margin-top: 10px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
         .invoice-btn { background: #38bdf8; color: #0f172a; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 10px; transition: all 0.2s; }
-        .invoice-btn:hover { background: #0ea5e9; color: white; box-shadow: 0 0 15px rgba(56,189,248,0.4); }
+        .invoice-btn:hover { background: #0ea5e9; color: white; }
         .escrow-item { background: rgba(30, 41, 59, 0.4); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 
         .global-lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; backdrop-filter: blur(5px); }
@@ -132,29 +131,31 @@
         .custom-dialog-title { color: #38bdf8; font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; }
         .custom-dialog-body { color: #e2e8f0; font-size: 0.95rem; line-height: 1.6; margin-bottom: 25px; white-space: pre-wrap; word-wrap: break-word; }
 
-/* MOBILE RESPONSIVENESS - FIXED TABS */
+        /* THE TRUE HARD-LOCKED MOBILE MATRIX */
         @media (max-width: 768px) {
-            .two-pane-layout { flex-direction: column; }
-            .sidebar { width: 100%; height: 35vh; border-right: none; border-bottom: 1px solid #1e293b; }
-            .chat-container { display: none; height: 65vh; }
-            .chat-container.show-chat { display: flex; height: 100%; position: absolute; inset: 0; z-index: 20; }
-            #mobileBackBtn { display: flex !important; }
-            
-            .header { padding: 15px; flex-direction: row; }
+            .detached-logo { top: -5px; left: -5px; width: 85px; height: 85px; }
+            .header { padding-left: 90px; }
             .logo-text { display: none; }
             
-            /* Pin tabs natively to bottom of phone */
-            .tab-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: 70px; flex-direction: row; padding: 0 10px; box-sizing: border-box; justify-content: space-evenly; border-right: none; border-top: 1px solid #1e293b; z-index: 99999; background: #0f172a; }
+            /* TABS LOCKED TO BOTTOM */
+            .tab-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: 70px; flex-direction: row; padding: 0 10px; box-sizing: border-box; justify-content: space-evenly; border-right: none; border-top: 1px solid #1e293b; z-index: 9999; }
             .tab-btn { width: 45px; height: 45px; }
             
-            /* Prevent content from hiding behind tabs */
-            .main-container { flex-direction: column; padding-bottom: 70px; }
-            .content-area { order: 1; height: 100%; }
-            .footer-input { padding: 10px; }
+            /* CONTENT AREA STOPS AT TABS */
+            .content-area { left: 0; bottom: 70px; }
+            .view-panel { padding: 15px; padding-bottom: 20px; }
+            
+            /* CHAT SPECIFICS */
+            .two-pane-layout { flex-direction: column; }
+            .sidebar { width: 100%; border-right: none; }
+            .chat-container { display: none; }
+            .chat-container.show-chat { display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 20; background: #0b1120; }
+            #mobileBackBtn { display: flex !important; }
+            
             .msg-row { max-width: 90%; }
             .pool-drawer { width: 85%; }
+            .footer-input { padding: 10px; }
         }
-        
     </style>
 </head>
 <body>
@@ -180,10 +181,10 @@
         <img src="" id="lightboxTargetSrc" class="lightbox-img">
     </div>
 
-    <!-- TOP HEADER BAR -->
+    <!-- TOP HEADER BAR WITH DETACHED LOGO -->
+    <img src="/static/streetbook_logo.png" class="detached-logo" onerror="this.style.display='none'">
     <div class="header">
         <div class="logo-container">
-            <img src="/static/sb.png" class="logo-img" onerror="this.style.display='none'">
             <div class="logo-text">StreetBook Hub</div>
         </div>
         <div class="user-info">
@@ -198,10 +199,10 @@
         
         <!-- SIDE NAVIGATION TABS -->
         <div class="tab-nav">
-            <button class="tab-btn active" id="chatTabBtn" onclick="switchTab('chatPanel', this)" title="Encrypted Comms">💬</button>
+            <button class="tab-btn active" id="chatTabBtn" onclick="switchTab('chatPanel', this)" title="Private Messages">💬</button>
             <button class="tab-btn" onclick="switchTab('networkPanel', this)" title="Feed">📡</button>
             <button class="tab-btn" onclick="switchTab('profilePanel', this); openProfile(currentUser);" title="My Profile">👤</button>
-            <button class="tab-btn" onclick="switchTab('utilPanel', this)" title="Terminal & Finances">⚙️</button>
+            <button class="tab-btn" onclick="switchTab('utilPanel', this)" title="Terminal">⚙️</button>
         </div>
 
         <!-- CONTENT DISPLAY AREA -->
@@ -246,7 +247,7 @@
                         <div style="padding: 0 20px; color:#10b981; font-size:0.75rem; min-height:15px; font-style:italic;" id="typingStatusContainer"></div>
                         <div class="pool-drawer" id="groupPoolDrawer"></div>
 
-                        <!-- Chat Input Block (Reordered to put Photo on left) -->
+                        <!-- Chat Input Block (Photo on left) -->
                         <div class="footer-input">
                             <button type="button" class="action-btn" id="chatPhotoBtn" style="display:none;" onclick="document.getElementById('chatPhotoUpload').click()" title="Send Image">📷</button>
                             <input type="file" id="chatPhotoUpload" accept="image/*" style="display:none;" onchange="uploadChatPhoto(this)">
@@ -312,14 +313,19 @@
             <div id="utilPanel" class="view-panel">
                 <h3 style="margin-top:0; color:#38bdf8; text-transform:uppercase; letter-spacing:1px; font-size:1.2rem; border-bottom:1px solid rgba(56,189,248,0.2); padding-bottom:10px;">Network Terminal</h3>
                 
-                <h4 style="margin:5px 0 10px 0; color: #f8fafc; text-shadow: 0 1px 3px rgba(0,0,0,0.5); font-size: 1.1rem;">Quick Start & Security Guide</h4>
-                <div style="background:rgba(30, 41, 59, 0.4); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); font-size:0.9rem; color:#cbd5e1; line-height:1.6; margin-bottom:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-                    <b>1. Total Encryption:</b> StreetBook utilizes True End-to-End Encryption (E2EE) built directly into your browser via WebCrypto. Your messages are encrypted <i>before</i> they leave your device using a master key locked by your Vault Password. The central servers literally cannot read your Private Messages or Gang Chats. Ever.<br><br>
-                    <b>2. Invite Ledger:</b> The network is closed. You must use the Terminal below to mint single-use registration keys. You are mathematically linked to the operators you invite. If they act out of line, your node reputation is impacted.<br><br>
-                    <b>3. Financial Anonymity:</b> The Financial Vault runs on the Bitcoin Lightning Network. You can instantly route funds to other operators using the "Direct Transfer" button, or request funds anonymously inside chat channels via the Escrow feature. <br><br>
-                    <i>Note on Vault Generation:</i> Vault generation is instant upon registration. If your Vault says "Offline", your server API keys were missing during your account creation. You must mint an invite key, log out, and create a fresh profile to activate it.<br><br>
-                    <b>4. The Global Feed:</b> Everything on the Feed tab is public to the network. Use Private Messages for sensitive intel.
-                </div>
+                <!-- COLLAPSIBLE QUICK START GUIDE -->
+                <details style="background:rgba(30, 41, 59, 0.4); padding:15px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); margin-bottom:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); cursor:pointer;">
+                    <summary style="font-size:1.1rem; font-weight:600; color:#f8fafc; outline:none; display:flex; align-items:center; gap:10px;">
+                        <span style="color:#38bdf8;">📖</span> Quick Start & Security Guide (Tap to Expand)
+                    </summary>
+                    <div style="margin-top:15px; font-size:0.9rem; color:#cbd5e1; line-height:1.6; cursor:default;">
+                        <b>1. Total Encryption:</b> StreetBook utilizes True End-to-End Encryption (E2EE) built directly into your browser via WebCrypto. Your messages are encrypted <i>before</i> they leave your device using a master key locked by your Vault Password. The central servers literally cannot read your Private Messages or Gang Chats. Ever.<br><br>
+                        <b>2. Invite Ledger:</b> The network is closed. You must use the Terminal below to mint single-use registration keys. You are mathematically linked to the operators you invite. If they act out of line, your node reputation is impacted.<br><br>
+                        <b>3. Financial Anonymity:</b> The Financial Vault runs on the Bitcoin Lightning Network. You can instantly route funds to other operators using the "Direct Transfer" button, or request funds anonymously inside chat channels via the Escrow feature. <br><br>
+                        <i>Note on Vault Generation:</i> Vault generation is instant upon registration. If your Vault says "Offline", your server API keys were missing during your account creation. You must mint an invite key, log out, and create a fresh profile to activate it.<br><br>
+                        <b>4. The Global Feed:</b> Everything on the Feed tab is public to the network. Use Private Messages for sensitive intel.
+                    </div>
+                </details>
 
                 <!-- PWA Install Container -->
                 <div id="pwaInstallContainer" style="display:none; background:rgba(56, 189, 248, 0.1); padding:20px; border-radius:12px; border:1px solid rgba(56, 189, 248, 0.3); margin-bottom:24px; text-align:center;">
@@ -342,7 +348,7 @@
                     <!-- Invite Node -->
                     <div style="background:rgba(15, 23, 42, 0.5); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:20px;">
                         <h4 style="margin:0 0 15px 0; color:#f8fafc;">Invite Ledger</h4>
-                        <button class="panel-btn primary" style="width:100%; margin-bottom:15px;" onclick="generateInvite()">Mint Access Key</button>
+                        <button class="panel-btn primary" style="width:100%; margin-bottom:15px;" onclick="safeGenerateInvite()">Mint Access Key</button>
                         <div id="inviteDisplay" style="font-family:monospace; color:#38bdf8; font-size:1.1rem; text-align:center; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px; min-height:24px; margin-bottom:15px;"></div>
                         <h5 style="margin:0 0 10px 0; color:#94a3b8; font-size:0.8rem; text-transform:uppercase;">Audit Trail</h5>
                         <div id="inviteLedgerContainer" style="display:flex; flex-direction:column; gap:8px;"></div>
@@ -758,7 +764,6 @@ fetchTargetKey: async function(username) {
                 }
                 hideMentionSuggestionMenu(menuId);
             });
-            // Disable enter to submit within autocomplete, let it wrap instead if not open
             document.addEventListener('click', (e) => {
                 if (e.target !== input && e.target !== menu && !menu.contains(e.target)) { hideMentionSuggestionMenu(menuId); }
             });
@@ -1129,7 +1134,7 @@ fetchTargetKey: async function(username) {
                     (p.comments || []).map(c => '<div class="comment-node"><strong>@' + (c.username || c[0]) + ':</strong> <span>' + parseMentions(c.content || c[1]) + '</span></div>').join('') +
                 '</div>' +
                 '<form onsubmit="submitContextComment(event, ' + p.id + ', ' + isWallPost + ')" style="display:flex; gap:8px; margin-top:10px;">' +
-                    '<input type="text" id="comment-input-' + p.id + '" class="panel-input" placeholder="Reply...">' +
+                    '<input type="text" id="comment-input-' + p.id + '" class="panel-input" style="margin-bottom:0;" placeholder="Reply...">' +
                     '<button type="submit" class="panel-btn primary" style="padding:8px 16px;">Post</button>' +
                 '</form>' +
             '</div>';
@@ -1171,7 +1176,13 @@ fetchTargetKey: async function(username) {
         function uploadProfileAvatar(element) {
             const file = element.files[0]; if(!file) return; const formData = new FormData(); formData.append('photo', file);
             fetch('/api/upload', { method: 'POST', body: formData }).then(res => res.json()).then(data => {
-                if(data.url) { fetch('/api/profile/' + currentUser, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ profile_pic: data.url }) }).then(() => openProfile(currentUser)); }
+                if(data.url) { 
+                    fetch('/api/profile/' + currentUser, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ profile_pic: data.url }) })
+                    .then(() => {
+                        loadNetworkUsers(); // Silently update the global user list so feeds show new pic
+                        openProfile(currentUser);
+                    }); 
+                }
             });
         }
 
@@ -1262,10 +1273,19 @@ fetchTargetKey: async function(username) {
             fetch('/api/stripe/checkout', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ amount: amount, id: txId }) }).then(res => res.json()).then(data => window.location.href = data.url); 
         }
         
-        function generateInvite() { 
-            fetch('/invite/generate', { method: 'POST' }).then(res => res.json()).then(data => { 
-                document.getElementById('inviteDisplay').innerText = data.key; loadInviteLedger();
-            }); 
+        // --- SAFE MINT KEY FIX ---
+        function safeGenerateInvite() { 
+            fetch('/invite/generate', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => { 
+                if(data.error) {
+                    customAlert(data.error, "MINTING FAILED");
+                } else {
+                    document.getElementById('inviteDisplay').innerText = data.key; 
+                    loadInviteLedger();
+                }
+            })
+            .catch(err => customAlert("Network error while minting key. Make sure your database is connected.", "ERROR"));
         }
         
         function loadInviteLedger() {
@@ -1317,6 +1337,8 @@ fetchTargetKey: async function(username) {
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') document.getElementById('pwaInstallContainer').style.display = 'none';
                 deferredPrompt = null;
+            } else {
+                customAlert("Your browser does not support automatic installation, or it is already installed. Use your browser's menu to 'Add to Home Screen'.", "INSTALL NOTICE");
             }
         });
 
