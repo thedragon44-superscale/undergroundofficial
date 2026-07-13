@@ -169,7 +169,23 @@ def init_db():
     ''')
 
     conn.commit()
+# ... (existing table creations) ...
+
+    # RUN AUTO-MIGRATIONS FOR OLD TABLES
+    try:
+        cur.execute("ALTER TABLE invite_keys ADD COLUMN creator VARCHAR(50) DEFAULT 'system'")
+        conn.commit()
+    except Exception:
+        conn.rollback() # Fails silently if column already exists
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN invited_by VARCHAR(50)")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
     conn.close()
+    
 
 # --- AUTHENTICATION & ACCESS CONTROL ---
 
@@ -670,19 +686,22 @@ def stripe_checkout():
 @app.route('/api/wallet/balance')
 def api_wallet_balance():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT ln_wallet_id FROM users WHERE username = %s", (session['username'],))
-    wallet_id = cur.fetchone()
-    conn.close()
-    
-    if not wallet_id or not wallet_id[0]: return jsonify({'status': 'mock_vault_active'})
-    
-    headers = {"X-Api-Key": wallet_id[0]}
-    res = requests.get(f"{os.getenv('LNBITS_URL')}/api/v1/wallet", headers=headers)
-    if res.status_code == 200:
-        return jsonify({'balance_sats': res.json().get('balance', 0) // 1000})
-    return jsonify({'error': 'Failed to fetch balance'}), 500
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT ln_wallet_id FROM users WHERE username = %s", (session['username'],))
+        wallet_id = cur.fetchone()
+        conn.close()
+        
+        if not wallet_id or not wallet_id[0]: return jsonify({'status': 'mock_vault_active'})
+        
+        headers = {"X-Api-Key": wallet_id[0]}
+        res = requests.get(f"{os.getenv('LNBITS_URL')}/api/v1/wallet", headers=headers, timeout=5)
+        if res.status_code == 200:
+            return jsonify({'balance_sats': res.json().get('balance', 0) // 1000})
+        return jsonify({'error': 'Node rejected connection'}), 500
+    except Exception as e:
+        return jsonify({'error': 'Network timeout'}), 500
 
 @app.route('/api/wallet/invoice', methods=['POST'])
 def api_wallet_invoice():

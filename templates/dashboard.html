@@ -132,7 +132,7 @@
         .custom-dialog-title { color: #38bdf8; font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; }
         .custom-dialog-body { color: #e2e8f0; font-size: 0.95rem; line-height: 1.6; margin-bottom: 25px; white-space: pre-wrap; word-wrap: break-word; }
 
-        /* MOBILE RESPONSIVENESS */
+/* MOBILE RESPONSIVENESS - FIXED TABS */
         @media (max-width: 768px) {
             .two-pane-layout { flex-direction: column; }
             .sidebar { width: 100%; height: 35vh; border-right: none; border-bottom: 1px solid #1e293b; }
@@ -143,15 +143,18 @@
             .header { padding: 15px; flex-direction: row; }
             .logo-text { display: none; }
             
-            .tab-nav { flex-direction: row; width: 100%; height: 70px; padding: 0 10px; box-sizing: border-box; justify-content: space-evenly; border-right: none; border-top: 1px solid #1e293b; order: 3; z-index: 30; gap: 5px; }
+            /* Pin tabs natively to bottom of phone */
+            .tab-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: 70px; flex-direction: row; padding: 0 10px; box-sizing: border-box; justify-content: space-evenly; border-right: none; border-top: 1px solid #1e293b; z-index: 99999; background: #0f172a; }
             .tab-btn { width: 45px; height: 45px; }
             
-            .main-container { flex-direction: column; }
-            .content-area { order: 1; height: calc(100vh - 140px); }
+            /* Prevent content from hiding behind tabs */
+            .main-container { flex-direction: column; padding-bottom: 70px; }
+            .content-area { order: 1; height: 100%; }
             .footer-input { padding: 10px; }
             .msg-row { max-width: 90%; }
             .pool-drawer { width: 85%; }
         }
+        
     </style>
 </head>
 <body>
