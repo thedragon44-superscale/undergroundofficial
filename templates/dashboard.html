@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <title>StreetBook Hub</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0b1120">
+    <link rel="apple-touch-icon" href="/static/sb.png">
     <!-- STRIPE CRYPTO ONRAMP ENGINE -->
     <script src="https://crypto-js.stripe.com/crypto-onramp-outer.js"></script>
     <style>
@@ -220,7 +223,15 @@
                 <button class="tab-btn" onclick="switchTab('profilePanel', this); openProfile(currentUser); shadowResetWallInputs();">Profile</button>
                 <button class="tab-btn" onclick="switchTab('utilPanel', this); loadEscrow(); loadInviteLedger();">Terminal</button>
             </div>
-
+<h4 style="margin:5px 0 10px 0; color: #f8fafc; text-shadow: 0 1px 3px rgba(0,0,0,0.5); font-size: 1.1rem;">Quick Start Guide</h4>
+                <div style="background:rgba(30, 41, 59, 0.4); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); font-size:0.9rem; color:#cbd5e1; line-height:1.6; margin-bottom:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+                    <!-- ... quick start text ... -->
+                </div>
+<div id="pwaInstallContainer" style="display:none; background:rgba(56, 189, 248, 0.1); padding:20px; border-radius:12px; border:1px solid rgba(56, 189, 248, 0.3); margin-bottom:24px; text-align:center;">
+                    <h4 style="margin:0 0 10px 0; color:#38bdf8;">📲 Mobile Node Available</h4>
+                    <p style="font-size:0.85rem; color:#cbd5e1; margin:0 0 15px 0;">Install StreetBook directly to your home screen for fullscreen native access.</p>
+                    <button id="pwaInstallBtn" class="panel-btn primary" style="box-shadow: 0 4px 15px rgba(56,189,248,0.4);">Install App</button>
+                </div>
             <div id="chatPanel" class="view-panel active" style="padding:0;">
                 <div class="dm-container" id="dmContainer">
                     <div class="dm-sidebar">
@@ -1462,7 +1473,41 @@
         }
 
         function shadowResetWallInputs() {}
+// --- PWA SERVICE WORKER & INSTALLATION INTERCEPTOR ---
+        let deferredPrompt;
+        
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js')
+                .then(reg => console.log('Service Worker Registered'))
+                .catch(err => console.log('SW Registration Failed', err));
+        }
 
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later.
+            deferredPrompt = e;
+            // Update UI to notify the user they can add to home screen
+            document.getElementById('pwaInstallContainer').style.display = 'block';
+        });
+
+        document.getElementById('pwaInstallBtn').addEventListener('click', async () => {
+            if (deferredPrompt !== null) {
+                // Show the install prompt
+                deferredPrompt.prompt();
+                // Wait for the user to respond to the prompt
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    document.getElementById('pwaInstallContainer').style.display = 'none';
+                }
+                deferredPrompt = null;
+            }
+        });
+        
+        window.addEventListener('appinstalled', () => {
+            document.getElementById('pwaInstallContainer').style.display = 'none';
+            console.log('PWA was installed');
+        });
         // --- LIFECYCLE BOOT SEQUENCE (AWAIT E2EE) ---
         window.onload = async function() {
             if(window.location.pathname === "/dashboard") { 
