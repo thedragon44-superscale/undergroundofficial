@@ -190,6 +190,7 @@ def init_db():
 
     conn.close()
     
+
 def init_master_admin():
     admin_user = os.getenv('ADMIN_USERNAME')
     admin_pass = os.getenv('ADMIN_PASSWORD')
@@ -198,15 +199,27 @@ def init_master_admin():
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM users WHERE username = %s", (admin_user,))
-    if not cur.fetchone():
-        # Provision LNbits Wallet for Admin
+    
+    # Check if the user exists and pull their current hash format
+    cur.execute("SELECT password_hash FROM users WHERE username = %s", (admin_user,))
+    existing_user = cur.fetchone()
+    
+    if existing_user:
+        current_hash = existing_user[0]
+        # Clean out legacy/broken hashes that don't conform to bcrypt structure ($2b$)
+        if not current_hash or not current_hash.startswith('$2b$'):
+            print(f"[*] Detected legacy hash signature for '{admin_user}'. Purging record for upgrade...")
+            cur.execute("DELETE FROM users WHERE username = %s", (admin_user,))
+            conn.commit()
+            existing_user = None
+
+    # Provision fresh account with native bcrypt salt alignment
+    if not existing_user:
         wallet_id = None
         try:
             ln_url = os.getenv('LNBITS_URL')
-            ln_key = os.getenv('LNBITS_ADMIN_KEY') # Adjust if your env var is named differently
+            ln_key = os.getenv('LNBITS_ADMIN_KEY')
             if ln_url and ln_key:
-                # Basic LNbits wallet creation call (adjust endpoint if using UserManager extension)
                 res = requests.post(
                     f"{ln_url}/api/v1/wallet",
                     headers={"X-Api-Key": ln_key},
@@ -218,15 +231,18 @@ def init_master_admin():
         except Exception as e:
             print(f"Admin LNbits provisioning failed: {e}")
 
-        hashed_pw = generate_password_hash(admin_pass)
+        # Hash explicitly using native bcrypt configuration matching your /login route
+        salt = bcrypt.gensalt()
+        hashed_pw = bcrypt.hashpw(admin_pass.encode('utf-8'), salt).decode('utf-8')
+        
         cur.execute("""
             INSERT INTO users (username, password_hash, ln_wallet_id) 
             VALUES (%s, %s, %s)
         """, (admin_user, hashed_pw, wallet_id))
         conn.commit()
-        print(f"[*] Master Admin '{admin_user}' Auto-Provisioned.")
+        print(f"[*] Master Admin '{admin_user}' Auto-Provisioned with valid bcrypt salt structure.")
+        
     conn.close()
-
 # Example of where to call it at the bottom of your file:
 # with app.app_context():
 #     init_master_admin()
