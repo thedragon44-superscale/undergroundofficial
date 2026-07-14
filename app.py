@@ -274,10 +274,15 @@ def login():
             
     return render_template('login.html', title='Login')
 
-@app.route('/register', methods=['POST'])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
-    # Handle both JSON (fetch API) and Form Data (standard HTML form)
+    # 1. If the user is just visiting the URL, show them the combined login/register page
+    if request.method == 'GET':
+        return render_template('login.html')
+
+    # 2. If they hit submit, process the registration data
     data = request.get_json(silent=True) or request.form
+    # ... the rest of the code remains exactly the same ...
     username = data.get('username')
     password = data.get('password')
     invite_key = data.get('invite_key')
