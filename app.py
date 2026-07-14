@@ -22,9 +22,7 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-fallback")
 CORS(app)
-with app.app_context():
-    init_db()
-    init_master_admin()
+
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
@@ -979,14 +977,16 @@ async def run_ws(port):
     async with websockets.serve(ws_handler, "0.0.0.0", port): 
         await asyncio.Event().wait()
 
+# --- ALL YOUR ROUTES AND FUNCTIONS ARE UP HERE ---
+
+# 1. This block runs for GUNICORN (Production) after all functions are defined
+with app.app_context():
+    init_db()
+    init_master_admin()
+
+# 2. This block runs for LOCAL TESTING and your WEBSOCKET MESH
 if __name__ == '__main__':
     mode = os.getenv("RUN_MODE", "LOCAL")
-    
-    # Auto-migrate database structure
-    init_db()
-    
-    # Auto-provision the Master Admin Account
-    init_master_admin()
     
     # Mount the financial escrow expiration janitor
     threading.Thread(target=run_escrow_expiration_janitor, daemon=True).start()
@@ -1001,4 +1001,3 @@ if __name__ == '__main__':
         flask_thread = threading.Thread(target=run_flask, daemon=True)
         flask_thread.start()
         asyncio.run(run_ws(5001))
-
