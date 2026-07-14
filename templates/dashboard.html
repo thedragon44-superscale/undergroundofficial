@@ -1249,13 +1249,12 @@ init: async function() {
                 container.innerHTML = '';
                 if(posts.length === 0) { container.innerHTML = '<div style="font-size:0.9rem; color:#94a3b8; text-align:center;">Feed is empty.</div>'; return; }
                 posts.forEach(p => {
-                    let match = networkUsersDirectory.find(u => u.username === p.username);
-                    let avatarSrc = match ? (match.profile_pic || DEFAULT_AVATAR_CDN) : DEFAULT_AVATAR_CDN;
+                    // FIX: Use the live profile_pic sent directly from the backend database join
+                    let avatarSrc = p.profile_pic || DEFAULT_AVATAR_CDN;
                     container.innerHTML += '<div class="feed-post"><div class="feed-post-header"><img src="' + avatarSrc + '" class="feed-avatar" onclick="openProfile(\'' + p.username + '\')"><div class="feed-content-area"><div class="feed-user" onclick="openProfile(\'' + p.username + '\')">@' + p.username + '</div><div class="feed-body">' + parseMentions(p.content) + '</div>' + (p.image_url ? '<img src="' + p.image_url + '" class="feed-attached-img" onclick="launchLightboxModal(this.src)">' : "") + '</div></div>' + compileSocialEngagementBar(p, false) + '</div>';
                 });
             });
         }
-
         function filterGlobalUsers() {
             const query = document.getElementById('globalUserSearch').value.toLowerCase().trim();
             const container = document.getElementById('globalSearchResultsContainer');
