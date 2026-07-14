@@ -288,7 +288,8 @@
                 <div style="max-width: 600px; margin: 0 auto; background:rgba(15, 23, 42, 0.6); padding:30px; border-radius:12px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
                     <div style="position:relative; display:inline-block;">
                         <img src="" id="profPicImg" style="width:120px; height:120px; border-radius:50%; object-fit:cover; border:3px solid #38bdf8; box-shadow:0 0 20px rgba(56,189,248,0.3); margin-bottom:15px;">
-                        <label for="profPicUpload" style="position:absolute; bottom:20px; right:0; background:#1e293b; border:1px solid #334155; border-radius:50%; width:35px; height:35px; display:flex; justify-content:center; align-items:center; cursor:pointer; font-size:1.2rem; box-shadow:0 4px 10px rgba(0,0,0,0.5); z-index:5;">✏️</label>
+                        <!-- Added ID here -->
+                        <label for="profPicUpload" id="profPicEditLabel" style="position:absolute; bottom:20px; right:0; background:#1e293b; border:1px solid #334155; border-radius:50%; width:35px; height:35px; display:flex; justify-content:center; align-items:center; cursor:pointer; font-size:1.2rem; box-shadow:0 4px 10px rgba(0,0,0,0.5); z-index:5;">✏️</label>
                         <input type="file" id="profPicUpload" accept="image/*" style="display:none;" onchange="uploadProfileAvatar(this)">
                     </div>
                     
@@ -1153,6 +1154,12 @@ init: async function() {
                 document.getElementById('profPicImg').src = data.profile_pic || DEFAULT_AVATAR_CDN;
                 document.getElementById('profStripe').innerText = data.stripe_account ? 'Wallet Attached' : "No Payment Method";
                 document.getElementById('profBio').innerHTML = parseMentions(data.bio);
+                
+                // --- NEW LOGIC: Hide the edit pencil if it's not our profile ---
+                const editLabel = document.getElementById('profPicEditLabel');
+                if (editLabel) {
+                    editLabel.style.display = (data.username === currentUser) ? "flex" : "none";
+                }
                 
                 const controls = document.getElementById('profControls'); controls.innerHTML = '';
                 const wallForm = document.getElementById('profileWallPostFormContainer');
