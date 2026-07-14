@@ -274,60 +274,89 @@ def login():
             
     return render_template('login.html', title='Login')
 
-@app.route('/register', methods=['GET', 'POST'])
+@app.route('/register', methods=['POST'])
 def register():
-    if request.method == 'POST':
-        invite_key = request.form['invite_key']
-        username = request.form['username']
-        password = request.form['password']
+    # Handle both JSON (fetch API) and Form Data (standard HTML form)
+    data = request.get_json(silent=True) or request.form
+    username = data.get('username')
+    password = data.get('password')
+    invite_key = data.get('invite_key')
+    
+    if not username or not password or not invite_key:
+        return jsonify({'error': 'Missing required fields.'}), 400
         
-        conn = get_db_connection()
-        cur = conn.cursor()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # 1. Validate Invite Key (No 'id' column used)
+    cur.execute("SELECT key, status, expires_at, generated_by FROM invite_keys WHERE key = %s", (invite_key,))
+    invite_row = cur.fetchone()
+    
+    if not invite_row:
+        conn.close()
+        return jsonify({'error': 'Invalid access key.'}), 400
         
-        # Verify Invite
-        cur.execute("SELECT id FROM invite_keys WHERE key = %s AND status = 'active'", (invite_key,))
-        invite = cur.fetchone()
+    _, status, expires_at, generated_by = invite_row
+    
+    if status != 'unused':
+        conn.close()
+        return jsonify({'error': 'Access key has already been claimed or is invalid.'}), 400
         
-        if not invite:
-            flash('Invalid or expired Invite Key.', 'error')
-            conn.close()
-            return redirect(url_for('register'))
-            
-        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    # 2. Strict Backend 5-Minute Timer Verification
+    current_ms = int(datetime.utcnow().timestamp() * 1000)
+    if expires_at and current_ms > expires_at:
+        cur.execute("UPDATE invite_keys SET status = 'expired' WHERE key = %s", (invite_key,))
+        conn.commit()
+        conn.close()
+        return jsonify({'error': 'Access key has expired.'}), 400
         
-        try:
-            # 1. Create User
-            cur.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (username, hashed))
-            
-            # 2. Consume Invite
-            cur.execute("UPDATE invite_keys SET status = 'used', used_by = %s WHERE id = %s", (username, invite[0]))
-            
-            # 3. Create Default Invite Key for New User
-            new_key = "METRO-" + str(uuid.uuid4())[:8].upper()
-            cur.execute("INSERT INTO invite_keys (key, creator) VALUES (%s, %s)", (new_key, username))
-            
-            # 4. Create Lightning Wallet
-            headers = {"X-Api-Key": os.getenv("LNBITS_MASTER_KEY"), "Content-Type": "application/json"}
-            payload = {"name": f"Vault_{username}"}
-            res = requests.post(f"{os.getenv('LNBITS_URL')}/api/v1/account", json=payload, headers=headers)
-            
-            if res.status_code == 201:
-                wallet_data = res.json()
-                cur.execute("UPDATE users SET ln_wallet_id = %s, ln_admin_key = %s WHERE username = %s", 
-                           (wallet_data.get('wallets')[0]['id'], wallet_data.get('wallets')[0]['adminkey'], username))
-            
-            conn.commit()
-            session['username'] = username
-            session['is_first_login'] = True
-            return redirect(url_for('dashboard'))
-            
-        except psycopg2.IntegrityError:
-            conn.rollback()
-            flash('Operator handle already exists.', 'error')
-        finally:
-            conn.close()
-            
-    return render_template('login.html', title='Register')
+    # 3. Guard against duplicate usernames
+    cur.execute("SELECT username FROM users WHERE username = %s", (username,))
+    if cur.fetchone():
+        conn.close()
+        return jsonify({'error': 'Username already taken.'}), 400
+        
+    # 4. Provision Lightning Wallet for new user
+    wallet_id = None
+    try:
+        ln_url = os.getenv('LNBITS_URL')
+        ln_key = os.getenv('LNBITS_ADMIN_KEY')
+        if ln_url and ln_key:
+            res = requests.post(
+                f"{ln_url}/api/v1/wallet",
+                headers={"X-Api-Key": ln_key},
+                json={"name": f"{username}_vault"},
+                timeout=5
+            )
+            if res.status_code in [200, 201]:
+                wallet_id = res.json().get('id')
+    except Exception as e:
+        print(f"LNbits offline during registration: {e}")
+        
+    # 5. Hash Password & Create Account
+    salt = bcrypt.gensalt()
+    hashed_pw = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+    
+    try:
+        cur.execute("""
+            INSERT INTO users (username, password_hash, ln_wallet_id, invited_by) 
+            VALUES (%s, %s, %s, %s)
+        """, (username, hashed_pw, wallet_id, generated_by))
+        
+        # 6. Burn the invite key permanently!
+        cur.execute("UPDATE invite_keys SET status = 'used', used_by = %s WHERE key = %s", (username, invite_key))
+        
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+        
+    conn.close()
+    
+    # Create the active session and redirect them to the dashboard
+    session['username'] = username
+    return jsonify({'success': True, 'redirect': '/dashboard'})
 
 @app.route('/logout')
 def logout():
