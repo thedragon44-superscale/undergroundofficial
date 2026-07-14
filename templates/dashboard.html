@@ -485,8 +485,7 @@
                     keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
                 );
             },
-
-            init: async function() {
+init: async function() {
                 const storageKey = 'sb_e2ee_keys_' + currentUser;
                 const savedKeys = localStorage.getItem(storageKey);
                 const statusDisplay = document.getElementById('e2eeKeyStatusDisplay');
@@ -496,11 +495,13 @@
                         const parsed = JSON.parse(savedKeys);
                         this.privateKey = await crypto.subtle.importKey("jwk", parsed.privateJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
                         this.publicKey = await crypto.subtle.importKey("jwk", parsed.publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-                        statusDisplay.innerText = "[ENCRYPTION ACTIVE]";
-                        statusDisplay.style.color = "#10b981";
-                        statusDisplay.style.display = "inline-block";
+                        if(statusDisplay) {
+                            statusDisplay.innerText = "[ENCRYPTION ACTIVE]";
+                            statusDisplay.style.color = "#10b981";
+                            statusDisplay.style.display = "inline-block";
+                        }
                         return;
-                    } catch (e) { console.warn("Local key cache invalid."); }
+                    } catch (e) { console.warn("Local key cache invalid."); localStorage.removeItem(storageKey); }
                 }
                 
                 const res = await fetch('/api/crypto/my_keys');
@@ -508,7 +509,7 @@
                     const data = await res.json();
                     if (data.encrypted_private_key) {
                         const pwd = await customPrompt("New device detected.\n\nEnter your Vault Password to unlock your chat history securely:", "", "UNLOCK VAULT");
-                        if (!pwd) { customAlert("History cannot be decrypted without your password.", "VAULT LOCKED"); return; }
+                        if (!pwd) { await customAlert("History cannot be decrypted without your password. Features may be limited.", "VAULT LOCKED"); return; }
                         
                         try {
                             const wrapKey = await this.derivePasswordKey(pwd);
@@ -522,13 +523,20 @@
                             this.publicKey = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
                             
                             localStorage.setItem(storageKey, JSON.stringify({ publicJwk, privateJwk }));
-                            statusDisplay.innerText = "[KEYS RESTORED SUCCESSFULLY]";
-                            statusDisplay.style.color = "#38bdf8";
-                            statusDisplay.style.display = "inline-block";
+                            if(statusDisplay) {
+                                statusDisplay.innerText = "[KEYS RESTORED SUCCESSFULLY]";
+                                statusDisplay.style.color = "#38bdf8";
+                                statusDisplay.style.display = "inline-block";
+                            }
                             return;
                         } catch (err) {
-                            customAlert("Incorrect password. Chat history cannot be read.", "DECRYPTION FAILED");
-                            return;
+                            const resetCmd = await customPrompt("Incorrect password.\n\nType 'RESET' to permanently wipe your Vault and generate a new one (old messages will become unreadable).", "", "DECRYPTION FAILED");
+                            if (resetCmd === "RESET") {
+                                localStorage.removeItem(storageKey);
+                                // Bypass return so it flows down and generates new keys
+                            } else {
+                                return; // Gracefully exit without crashing UI
+                            }
                         }
                     }
                 }
@@ -559,11 +567,13 @@
                     body: JSON.stringify({ public_key: JSON.stringify(publicJwk), encrypted_private_key: encPrivStr }) 
                 });
                 
-                statusDisplay.innerText = "[ENCRYPTION SETUP COMPLETE]";
-                statusDisplay.style.color = "#10b981";
-                statusDisplay.style.display = "inline-block";
+                if(statusDisplay) {
+                    statusDisplay.innerText = "[ENCRYPTION SETUP COMPLETE]";
+                    statusDisplay.style.color = "#10b981";
+                    statusDisplay.style.display = "inline-block";
+                }
             },
-
+ 
             fetchTargetKey: async function(username) {
                 if (this.publicKeyCache[username]) return this.publicKeyCache[username];
                 const res = await fetch('/api/crypto/public_key/' + username);

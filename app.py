@@ -339,7 +339,10 @@ def generate_invite():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     
     new_key = "METRO-" + os.urandom(4).hex().upper()
-    expires = datetime.utcnow() + timedelta(minutes=5)
+    expires_dt = datetime.utcnow() + timedelta(minutes=5)
+    
+    # Convert datetime to UNIX timestamp (milliseconds) to satisfy Postgres bigint column
+    expires_ms = int(expires_dt.timestamp() * 1000)
     
     conn = get_db_connection()
     cur = conn.cursor()
@@ -347,7 +350,7 @@ def generate_invite():
         cur.execute("""
             INSERT INTO invite_keys (key, generated_by, creator, status, expires_at) 
             VALUES (%s, %s, %s, 'unused', %s)
-        """, (new_key, session['username'], session['username'], expires))
+        """, (new_key, session['username'], session['username'], expires_ms))
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -355,8 +358,8 @@ def generate_invite():
         return jsonify({'error': str(e)}), 500
         
     conn.close()
-    # Sending the ISO format back so JavaScript can run the live 5:00 countdown
-    return jsonify({'key': new_key, 'expires_at': expires.isoformat() + 'Z'})
+    # Send ISO format to frontend specifically for the Javascript live countdown timer
+    return jsonify({'key': new_key, 'expires_at': expires_dt.isoformat() + 'Z'})
 
 @app.route('/api/invites/ledger', methods=['GET'])
 def get_invite_ledger():
