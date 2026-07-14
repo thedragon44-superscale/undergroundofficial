@@ -361,7 +361,7 @@ def register():
     
     # Create the active session and redirect them to the dashboard
     session['username'] = username
-    return jsonify({'success': True, 'redirect': '/dashboard'})
+    return redirect('/dashboard')
 
 @app.route('/logout')
 def logout():
