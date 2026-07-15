@@ -750,6 +750,9 @@ init: async function() {
                 btnElement.classList.add('active');
             }
             document.getElementById(panelId).classList.add('active');
+            
+            // Save the active tab memory
+            sessionStorage.setItem('streetcode_active_tab', panelId);
         }
 
         function switchSidebarMode(mode) {
@@ -1563,6 +1566,18 @@ init: async function() {
                 loadEscrow();
                 initCryptoVault();
                 setInterval(refreshLiveLightningBalance, 10000);
+
+                // --- TAB MEMORY RESTORE ---
+                const savedTab = sessionStorage.getItem('streetcode_active_tab');
+                if (savedTab) {
+                    // Find the button associated with the saved tab
+                    const targetBtn = document.querySelector(`button[onclick*="${savedTab}"]`);
+                    if (targetBtn) {
+                        switchTab(savedTab, targetBtn);
+                        // If they were on the profile tab, ensure we load their profile data
+                        if (savedTab === 'profilePanel') openProfile(currentUser);
+                    }
+                }
             }
         };
     </script>
