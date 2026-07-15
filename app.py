@@ -200,15 +200,15 @@ def init_master_admin():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # Check if the user exists and pull their current hash format
-    cur.execute("SELECT password_hash FROM users WHERE username = %s", (admin_user,))
+    # Check if user exists and if they are missing a lightning vault
+    cur.execute("SELECT password_hash, ln_wallet_id FROM users WHERE username = %s", (admin_user,))
     existing_user = cur.fetchone()
     
     if existing_user:
-        current_hash = existing_user[0]
-        # Clean out legacy/broken hashes that don't conform to bcrypt structure ($2b$)
-        if not current_hash or not current_hash.startswith('$2b$'):
-            print(f"[*] Detected legacy hash signature for '{admin_user}'. Purging record for upgrade...")
+        current_hash, wallet_id = existing_user
+        # Purge the account if the password hash is legacy OR if the vault failed to generate
+        if not current_hash or not current_hash.startswith('$2b$') or not wallet_id:
+            print(f"[*] Detected broken Admin node for '{admin_user}'. Purging record for upgrade...")
             cur.execute("DELETE FROM users WHERE username = %s", (admin_user,))
             conn.commit()
             existing_user = None
