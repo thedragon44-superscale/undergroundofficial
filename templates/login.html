@@ -171,12 +171,12 @@
           {% endif %}
         {% endwith %}
 
-        <form method="POST" action="{{ url_for('register' if title == 'Register' else 'login') }}">
-            {% if title == 'Register' %}
-            <div class="input-group">
-                <input type="text" name="invite_key" placeholder="Invite Key (e.g. METRO-...)" required autocomplete="off">
+        <form method="POST" action="{{ url_for('register' if title == 'Register' else 'login') }}" id="authForm">
+            
+            <!-- Invite Key Box (Dynamically hidden/shown) -->
+            <div class="input-group" id="inviteKeySection" style="display: {% if title == 'Register' %}block{% else %}none{% endif %};">
+                <input type="text" id="invite_key" name="invite_key" placeholder="Invite Key (e.g. METRO-...)" autocomplete="off">
             </div>
-            {% endif %}
             
             <div class="input-group">
                 <input type="text" name="username" placeholder="Operator Handle" required autocomplete="off">
@@ -187,15 +187,14 @@
                 <span class="pwd-toggle" id="toggleBtn" onclick="togglePassword()">👁️</span>
             </div>
             
-            <button type="submit" class="btn">{{ 'Establish Node' if title == 'Register' else 'Authenticate' }}</button>
+            <button type="submit" class="btn" id="submitBtn">{{ 'Establish Node' if title == 'Register' else 'Authenticate' }}</button>
         </form>
 
+        <!-- Dynamic Toggle Link -->
         <div class="toggle-link">
-            {% if title == 'Login' %}
-                No clearance? <a href="{{ url_for('register') }}">Use Invite Key</a>
-            {% else %}
-                Already registered? <a href="{{ url_for('login') }}">Login</a>
-            {% endif %}
+            <a id="modeToggle" onclick="toggleAuthMode()">
+                {{ 'Already registered? Login' if title == 'Register' else 'No clearance? Use Invite Key' }}
+            </a>
         </div>
     </div>
 
@@ -209,6 +208,32 @@
             } else {
                 input.type = 'password';
                 btn.innerText = '👁️';
+            }
+        }
+
+function toggleAuthMode() {
+            const keySection = document.getElementById('inviteKeySection');
+            const keyInput = document.getElementById('invite_key');
+            const form = document.getElementById('authForm');
+            const btn = document.getElementById('submitBtn');
+            const modeToggle = document.getElementById('modeToggle');
+
+            if (keySection.style.display === 'none') {
+                // Switch to Register Mode
+                keySection.style.display = 'block';
+                keyInput.required = true;               // Force them to enter a key
+                form.action = "{{ url_for('register') }}"; // Route submission to register backend
+                btn.innerText = 'Establish Node';
+                modeToggle.innerText = 'Already registered? Login';
+                keyInput.focus();
+            } else {
+                // Switch to Login Mode
+                keySection.style.display = 'none';
+                keyInput.required = false;              // Remove requirement so login works
+                keyInput.value = '';                    // Clear out any typed key
+                form.action = "{{ url_for('login') }}";    // Route submission to login backend
+                btn.innerText = 'Authenticate';
+                modeToggle.innerText = 'No clearance? Use Invite Key';
             }
         }
     </script>
