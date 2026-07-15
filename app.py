@@ -765,36 +765,6 @@ def release_pool(pool_id):
 
 # --- FINANCIALS: 1-ON-1 ESCROW & STRIPE ---
 
-@app.route('/api/v1/payments/webhook', methods=['POST'])
-def stripe_webhook():
-    payload = request.data
-    sig_header = request.headers.get('Stripe-Signature')
-    
-    try:
-        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
-    except Exception as e:
-        return jsonify({'status': 'invalid payload or signature'}), 400
-
-    if event['type'] == 'checkout.session.completed':
-        session_obj = event['data']['object']
-        purpose = session_obj.get('metadata', {}).get('purpose')
-        
-        conn = get_db_connection()
-        cur = conn.cursor()
-        try:
-            if purpose == 'pro_upgrade':
-                username = session_obj.get('metadata', {}).get('username')
-                cur.execute("UPDATE users SET is_pro = TRUE WHERE username = %s", (username,))
-            elif purpose == 'fund_escrow':
-                escrow_id = session_obj.get('metadata', {}).get('escrow_id')
-                cur.execute("UPDATE escrow_transactions SET status = 'held_in_escrow' WHERE id = %s", (escrow_id,))
-            conn.commit()
-        except:
-            conn.rollback()
-        finally:
-            conn.close()
-
-    return jsonify({'success': True}), 200
 
 @app.route('/api/escrow/create', methods=['POST'])
 def create_escrow():
