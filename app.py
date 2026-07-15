@@ -807,10 +807,10 @@ def create_escrow():
     except (ValueError, TypeError):
         return jsonify({'error': 'Invalid amount format'}), 400
 
-    # --- THE PATCH: PREVENT NEGATIVE & ZERO AMOUNTS ---
+    # Prevent negative & zero amounts
     if amount_sats <= 0:
         return jsonify({'error': 'Amount must be strictly greater than zero.'}), 400
-    if amount_sats > 100000000: # Optional: Cap at 1 full Bitcoin to prevent overflow attacks
+    if amount_sats > 100000000: # Cap at 1 full Bitcoin
         return jsonify({'error': 'Amount exceeds platform maximum.'}), 400
         
     receiver = data['receiver']
@@ -819,66 +819,41 @@ def create_escrow():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        # ... (Leave the rest of the existing try/except block exactly as it is) ...
-@app.route('/api/escrow/release', methods=['POST'])
-def release_escrow():
-    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
-    tx_id = request.json.get('id')
-    
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        # 1. Lock row to prevent race conditions
-        cur.execute("SELECT amount_cents, sender, receiver, status FROM escrow_transactions WHERE id = %s FOR UPDATE", (tx_id,))
-        tx = cur.fetchone()
+        # 1. Get Sender's Wallet
+        cur.execute("SELECT ln_wallet_id FROM users WHERE username = %s", (sender,))
+        sender_wallet = cur.fetchone()[0]
         
-        if not tx or tx[1] != session['username'] or tx[3] != 'held_in_escrow':
-            return jsonify({'error': 'Unauthorized or invalid state'}), 403
-            
-        total_sats = int(tx[0])
-        receiver = tx[2]
-        
-        # Skim the 5% Platform Tax
-        platform_cut = int(total_sats * 0.05)
-        release_amount = total_sats - platform_cut
-        
-        # 2. Get Receiver's Wallet
-        cur.execute("SELECT ln_wallet_id FROM users WHERE username = %s", (receiver,))
-        receiver_wallet_row = cur.fetchone()
-        if not receiver_wallet_row or not receiver_wallet_row[0]:
-            return jsonify({'error': 'Receiver vault offline'}), 400
-        receiver_wallet = receiver_wallet_row[0]
-        
-        # 3. Generate Invoice on Receiver Wallet
+        # 2. Generate Invoice on the Platform Treasury (using Env Admin Key)
+        treasury_key = os.getenv('LNBITS_ADMIN_KEY')
         inv_res = requests.post(
             f"{os.getenv('LNBITS_URL')}/api/v1/payments",
-            headers={"X-Api-Key": receiver_wallet},
-            json={"out": False, "amount": release_amount, "memo": f"Escrow Release TX-{tx_id}"}
+            headers={"X-Api-Key": treasury_key},
+            json={"out": False, "amount": amount_sats, "memo": f"Escrow Lock: {sender} to {receiver}"}
         )
+        if inv_res.status_code != 201:
+            return jsonify({'error': 'Platform Treasury unavailable'}), 500
         bolt11 = inv_res.json().get('payment_request')
         
-        # 4. Pay Invoice from Platform Treasury
-        treasury_key = os.getenv('LNBITS_ADMIN_KEY')
+        # 3. Pay Invoice from Sender's Vault to lock the funds
         pay_res = requests.post(
             f"{os.getenv('LNBITS_URL')}/api/v1/payments",
-            headers={"X-Api-Key": treasury_key},
+            headers={"X-Api-Key": sender_wallet},
             json={"out": True, "bolt11": bolt11}
         )
+        if pay_res.status_code != 201:
+            return jsonify({'error': 'Insufficient funds in sender Vault'}), 400
         
-        if pay_res.status_code == 201:
-            cur.execute("INSERT INTO platform_treasury (source_escrow_id, amount_collected) VALUES (%s, %s)", (tx_id, platform_cut))
-            cur.execute("UPDATE escrow_transactions SET status = 'released_to_receiver' WHERE id = %s", (tx_id,))
-            conn.commit()
-            return jsonify({'status': 'success'})
-        else:
-            return jsonify({'error': 'Treasury routing failed'}), 500
-            
+        # 4. Record Escrow in the Database
+        cur.execute("INSERT INTO escrow_transactions (sender, receiver, amount_cents, status) VALUES (%s, %s, %s, 'held_in_escrow') RETURNING id", 
+                    (sender, receiver, amount_sats))
+        tx_id = cur.fetchone()[0]
+        conn.commit()
+        return jsonify({'id': tx_id, 'status': 'held_in_escrow'})
     except Exception as e:
         conn.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
-
 
 # --- STRIPE WEBHOOK: PRO UPGRADES & IDEMPOTENCY ---
 @app.route('/webhook', methods=['POST'])
