@@ -621,11 +621,24 @@ init: async function() {
             encrypt: async function(plaintext, targetUsername) {
                 const targetPubKey = await this.fetchTargetKey(targetUsername);
                 if (!targetPubKey) throw new Error("Target user public key missing.");
+                
                 const aesKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt"]);
                 const iv = crypto.getRandomValues(new Uint8Array(12));
                 const encryptedPayload = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, aesKey, new TextEncoder().encode(plaintext));
-                const encryptedAesKey = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, targetPubKey, await crypto.subtle.exportKey("raw", aesKey));
-                return JSON.stringify({ k: this.ab2str(encryptedAesKey), i: this.ab2str(iv.buffer), p: this.ab2str(encryptedPayload) });
+                
+                const rawAesKey = await crypto.subtle.exportKey("raw", aesKey);
+                
+                // DUAL ENCRYPTION: Lock the AES key for the receiver AND the sender
+                const encAesTarget = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, targetPubKey, rawAesKey);
+                const encAesSelf = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, this.publicKey, rawAesKey);
+                
+                return JSON.stringify({ 
+                    isDual: true,
+                    targetK: this.ab2str(encAesTarget),
+                    selfK: this.ab2str(encAesSelf),
+                    i: this.ab2str(iv.buffer), 
+                    p: this.ab2str(encryptedPayload) 
+                });
             },
 
             encryptGroup: async function(plaintext, memberUsernames) {
@@ -648,7 +661,7 @@ init: async function() {
                 return JSON.stringify({ isGroup: true, i: this.ab2str(iv.buffer), p: this.ab2str(encryptedPayload), keys: keysMap });
             },
 
-            decrypt: async function(cipherJsonStr) {
+            decrypt: async function(cipherJsonStr, msgSender = null) {
                 if (!this.privateKey) return "[🔒 VAULT LOCKED]";
                 try {
                     let packet;
@@ -663,15 +676,24 @@ init: async function() {
                         return new TextDecoder().decode(decryptedPayloadBuf);
                     }
 
+                    // Handle New Dual-Encryption format
+                    if (packet.isDual) {
+                        const encryptedAesStr = (msgSender === currentUser) ? packet.selfK : packet.targetK;
+                        if (!encryptedAesStr) return "[🔒 E2EE FAULT]";
+                        const aesKeyRaw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, this.privateKey, this.str2ab(encryptedAesStr));
+                        const aesKey = await crypto.subtle.importKey("raw", aesKeyRaw, { name: "AES-GCM" }, true, ["decrypt"]);
+                        const decryptedPayloadBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(this.str2ab(packet.i)) }, aesKey, this.str2ab(packet.p));
+                        return new TextDecoder().decode(decryptedPayloadBuf);
+                    }
+
+                    // Legacy single-encryption fallback (for old messages)
                     if (!packet.k || !packet.i || !packet.p) return cipherJsonStr;
                     const aesKeyRaw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, this.privateKey, this.str2ab(packet.k));
                     const aesKey = await crypto.subtle.importKey("raw", aesKeyRaw, { name: "AES-GCM" }, true, ["decrypt"]);
                     const decryptedPayloadBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(this.str2ab(packet.i)) }, aesKey, this.str2ab(packet.p));
                     return new TextDecoder().decode(decryptedPayloadBuf);
                 } catch (e) { return "[🔒 SECURE MESSAGE - DECRYPTION FAILED]"; }
-            }
-        };
-
+            },
         // --- FINANCIAL ENGINE ---
         function initCryptoVault() {
             fetch('/api/profile/' + currentUser).then(res => res.json()).then(data => {
@@ -865,8 +887,8 @@ init: async function() {
                 if (data.is_presence) { onlineUsersList = data.online_users || []; renderInboxList(); return; }
                 if (data.is_history) { 
                     decryptedHistory = await Promise.all(data.history.map(async (msg) => {
-                        if (msg.sender !== currentUser) { msg.text = await E2EE.decrypt(msg.text); } 
-                        else { msg.text = "[🔒 E2EE Outbound Sealed]"; }
+                        // Pass the sender to the decrypt function so it knows which key to use
+                        msg.text = await E2EE.decrypt(msg.text, msg.sender); 
                         return msg;
                     }));
                     renderInboxList(); 
