@@ -507,6 +507,12 @@
                 return bytes.buffer;
             },
 
+            generateRecoveryKey: function() {
+                const arr = new Uint8Array(8); // Generates 16 hex characters
+                crypto.getRandomValues(arr);
+                return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase().match(/.{1,4}/g).join('-');
+            },
+
             derivePasswordKey: async function(password) {
                 const enc = new TextEncoder();
                 const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
@@ -526,70 +532,90 @@
                         const parsed = JSON.parse(savedKeys);
                         this.privateKey = await crypto.subtle.importKey("jwk", parsed.privateJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
                         this.publicKey = await crypto.subtle.importKey("jwk", parsed.publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-                        if(statusDisplay) {
-                            statusDisplay.innerText = "[ENCRYPTION ACTIVE]";
-                            statusDisplay.style.color = "#10b981";
-                            statusDisplay.style.display = "inline-block";
-                        }
+                        if(statusDisplay) { statusDisplay.innerText = "[ENCRYPTION ACTIVE]"; statusDisplay.style.color = "#10b981"; statusDisplay.style.display = "inline-block"; }
                         return;
-                    } catch (e) { console.warn("Local key cache invalid."); sessionStorage.removeItem(storageKey); }
+                    } catch (e) { sessionStorage.removeItem(storageKey); }
                 }
                 
                 const res = await fetch('/api/crypto/my_keys');
                 if (res.ok) {
                     const data = await res.json();
                     if (data.encrypted_private_key) {
-                        const pwd = await customPrompt("New session detected.\n\nEnter your Vault Password to unlock your chat history securely:", "", "UNLOCK VAULT");
-                        if (!pwd) { await customAlert("History cannot be decrypted without your password. Features may be limited.", "VAULT LOCKED"); return; }
+                        let pwd = await customPrompt("New session detected.\n\nEnter your Vault Password to unlock your chat history:", "", "UNLOCK VAULT");
+                        if (!pwd) return;
                         
+                        const encPacket = JSON.parse(data.encrypted_private_key);
+                        let decryptedJwkStrBuf = null;
+
                         try {
+                            // 1. Try decrypting with standard password
                             const wrapKey = await this.derivePasswordKey(pwd);
-                            const encPacket = JSON.parse(data.encrypted_private_key);
-                            const decryptedJwkStrBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv: this.str2ab(encPacket.iv) }, wrapKey, this.str2ab(encPacket.ciphertext));
+                            decryptedJwkStrBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv: this.str2ab(encPacket.iv) }, wrapKey, this.str2ab(encPacket.ciphertext));
+                        } catch (err) {
+                            // 2. PASSWORD FAILED: Trigger Recovery Protocol
+                            const recoveryCode = await customPrompt("Incorrect password.\n\nIf you lost it, enter your 16-character Recovery Key (e.g. A1B2-C3D4...). Type 'RESET' to wipe your vault entirely.", "", "VAULT RECOVERY");
                             
+                            if (recoveryCode === "RESET") {
+                                sessionStorage.removeItem(storageKey);
+                                // Fall through to generate new keys below
+                            } else if (recoveryCode && encPacket.rec_iv && encPacket.rec_cipher) {
+                                try {
+                                    // Attempt decryption using the emergency backup key
+                                    const recWrapKey = await this.derivePasswordKey(recoveryCode);
+                                    decryptedJwkStrBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv: this.str2ab(encPacket.rec_iv) }, recWrapKey, this.str2ab(encPacket.rec_cipher));
+                                    await customAlert("Recovery successful! Your vault is temporarily unlocked for this session. Please secure your account.", "VAULT RESTORED");
+                                } catch (recErr) {
+                                    await customAlert("Recovery Key invalid. Vault remains locked.", "DECRYPTION FAILED");
+                                    return;
+                                }
+                            } else { return; }
+                        }
+
+                        // Mount the keys if decryption succeeded (via either method)
+                        if (decryptedJwkStrBuf) {
                             const privateJwk = JSON.parse(new TextDecoder().decode(decryptedJwkStrBuf));
                             const publicJwk = JSON.parse(data.public_key);
                             
                             this.privateKey = await crypto.subtle.importKey("jwk", privateJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
                             this.publicKey = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-                            
                             sessionStorage.setItem(storageKey, JSON.stringify({ publicJwk, privateJwk }));
-                            if(statusDisplay) {
-                                statusDisplay.innerText = "[KEYS RESTORED SUCCESSFULLY]";
-                                statusDisplay.style.color = "#38bdf8";
-                                statusDisplay.style.display = "inline-block";
-                            }
+                            if(statusDisplay) { statusDisplay.innerText = "[KEYS RESTORED]"; statusDisplay.style.color = "#38bdf8"; statusDisplay.style.display = "inline-block"; }
                             return;
-                        } catch (err) {
-                            const resetCmd = await customPrompt("Incorrect password.\n\nType 'RESET' to permanently wipe your Vault and generate a new one (old messages will become unreadable).", "", "DECRYPTION FAILED");
-                            if (resetCmd === "RESET") {
-                                sessionStorage.removeItem(storageKey);
-                            } else {
-                                return; 
-                            }
                         }
                     }
                 }
                 
-                const newPwd = await customPrompt("Welcome. Let's secure your account.\n\nCreate a Vault Password. This locks your messages so only you can read them, even across different devices.", "", "CREATE VAULT PASSWORD");
-                
+                // --- NEW VAULT CREATION ---
+                const newPwd = await customPrompt("Welcome. Let's secure your account.\n\nCreate a Vault Password. This locks your messages so only you can read them.", "", "CREATE VAULT PASSWORD");
+                if(!newPwd) return;
+
                 const keyPair = await crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]);
                 this.privateKey = keyPair.privateKey;
                 this.publicKey = keyPair.publicKey;
                 
                 const publicJwk = await crypto.subtle.exportKey("jwk", this.publicKey);
                 const privateJwk = await crypto.subtle.exportKey("jwk", this.privateKey);
-                
                 sessionStorage.setItem(storageKey, JSON.stringify({ publicJwk, privateJwk }));
                 
-                let encPrivStr = "";
-                if (newPwd) {
-                    const wrapKey = await this.derivePasswordKey(newPwd);
-                    const iv = crypto.getRandomValues(new Uint8Array(12));
-                    const privStrBuf = new TextEncoder().encode(JSON.stringify(privateJwk));
-                    const ciphertextBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, wrapKey, privStrBuf);
-                    encPrivStr = JSON.stringify({ iv: this.ab2str(iv.buffer), ciphertext: this.ab2str(ciphertextBuf) });
-                }
+                const privStrBuf = new TextEncoder().encode(JSON.stringify(privateJwk));
+
+                // 1. Wrap with Password
+                const wrapKey = await this.derivePasswordKey(newPwd);
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const ciphertextBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, wrapKey, privStrBuf);
+                
+                // 2. Wrap with generated Recovery Key
+                const recKeyStr = this.generateRecoveryKey();
+                const recWrapKey = await this.derivePasswordKey(recKeyStr);
+                const recIv = crypto.getRandomValues(new Uint8Array(12));
+                const recCiphertextBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv: recIv }, recWrapKey, privStrBuf);
+
+                const encPrivStr = JSON.stringify({ 
+                    iv: this.ab2str(iv.buffer), 
+                    ciphertext: this.ab2str(ciphertextBuf),
+                    rec_iv: this.ab2str(recIv.buffer),
+                    rec_cipher: this.ab2str(recCiphertextBuf)
+                });
                 
                 fetch('/api/crypto/keys', { 
                     method: 'POST', 
@@ -597,11 +623,10 @@
                     body: JSON.stringify({ public_key: JSON.stringify(publicJwk), encrypted_private_key: encPrivStr }) 
                 });
                 
-                if(statusDisplay) {
-                    statusDisplay.innerText = "[ENCRYPTION SETUP COMPLETE]";
-                    statusDisplay.style.color = "#10b981";
-                    statusDisplay.style.display = "inline-block";
-                }
+                // FORCE THE USER TO SEE AND RECORD THE RECOVERY KEY
+                await customAlert(`CRITICAL: Write this down offline.\n\nIf you lose your Vault Password, this is the ONLY way to recover your chats:\n\n${recKeyStr}`, "VAULT RECOVERY KEY");
+
+                if(statusDisplay) { statusDisplay.innerText = "[ENCRYPTION SETUP COMPLETE]"; statusDisplay.style.color = "#10b981"; statusDisplay.style.display = "inline-block"; }
             },
  
             fetchTargetKey: async function(username) {
