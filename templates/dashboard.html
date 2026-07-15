@@ -515,9 +515,9 @@
                     keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
                 );
             },
-init: async function() {
+
+            init: async function() {
                 const storageKey = 'sb_e2ee_keys_' + currentUser;
-                // STRICT MEMORY UPDATE: Use sessionStorage so keys burn on tab close
                 const savedKeys = sessionStorage.getItem(storageKey);
                 const statusDisplay = document.getElementById('e2eeKeyStatusDisplay');
                 
@@ -553,7 +553,6 @@ init: async function() {
                             this.privateKey = await crypto.subtle.importKey("jwk", privateJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
                             this.publicKey = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
                             
-                            // Save to strict session storage
                             sessionStorage.setItem(storageKey, JSON.stringify({ publicJwk, privateJwk }));
                             if(statusDisplay) {
                                 statusDisplay.innerText = "[KEYS RESTORED SUCCESSFULLY]";
@@ -565,7 +564,6 @@ init: async function() {
                             const resetCmd = await customPrompt("Incorrect password.\n\nType 'RESET' to permanently wipe your Vault and generate a new one (old messages will become unreadable).", "", "DECRYPTION FAILED");
                             if (resetCmd === "RESET") {
                                 sessionStorage.removeItem(storageKey);
-                                // Bypass return so it flows down and generates new keys
                             } else {
                                 return; 
                             }
@@ -582,7 +580,6 @@ init: async function() {
                 const publicJwk = await crypto.subtle.exportKey("jwk", this.publicKey);
                 const privateJwk = await crypto.subtle.exportKey("jwk", this.privateKey);
                 
-                // Save to strict session storage
                 sessionStorage.setItem(storageKey, JSON.stringify({ publicJwk, privateJwk }));
                 
                 let encPrivStr = "";
@@ -628,7 +625,6 @@ init: async function() {
                 
                 const rawAesKey = await crypto.subtle.exportKey("raw", aesKey);
                 
-                // DUAL ENCRYPTION: Lock the AES key for the receiver AND the sender
                 const encAesTarget = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, targetPubKey, rawAesKey);
                 const encAesSelf = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, this.publicKey, rawAesKey);
                 
@@ -676,7 +672,6 @@ init: async function() {
                         return new TextDecoder().decode(decryptedPayloadBuf);
                     }
 
-                    // Handle New Dual-Encryption format
                     if (packet.isDual) {
                         const encryptedAesStr = (msgSender === currentUser) ? packet.selfK : packet.targetK;
                         if (!encryptedAesStr) return "[🔒 E2EE FAULT]";
@@ -686,14 +681,14 @@ init: async function() {
                         return new TextDecoder().decode(decryptedPayloadBuf);
                     }
 
-                    // Legacy single-encryption fallback (for old messages)
                     if (!packet.k || !packet.i || !packet.p) return cipherJsonStr;
                     const aesKeyRaw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, this.privateKey, this.str2ab(packet.k));
                     const aesKey = await crypto.subtle.importKey("raw", aesKeyRaw, { name: "AES-GCM" }, true, ["decrypt"]);
                     const decryptedPayloadBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(this.str2ab(packet.i)) }, aesKey, this.str2ab(packet.p));
                     return new TextDecoder().decode(decryptedPayloadBuf);
                 } catch (e) { return "[🔒 SECURE MESSAGE - DECRYPTION FAILED]"; }
-            },
+            }
+        };
         // --- FINANCIAL ENGINE ---
         function initCryptoVault() {
             fetch('/api/profile/' + currentUser).then(res => res.json()).then(data => {
@@ -887,7 +882,6 @@ init: async function() {
                 if (data.is_presence) { onlineUsersList = data.online_users || []; renderInboxList(); return; }
                 if (data.is_history) { 
                     decryptedHistory = await Promise.all(data.history.map(async (msg) => {
-                        // Pass the sender to the decrypt function so it knows which key to use
                         msg.text = await E2EE.decrypt(msg.text, msg.sender); 
                         return msg;
                     }));
@@ -903,7 +897,7 @@ init: async function() {
                     return;
                 }
                 if (data.sender && data.receiver && data.sender !== currentUser) {
-                    data.text = await E2EE.decrypt(data.text);
+                    data.text = await E2EE.decrypt(data.text, data.sender);
                     decryptedHistory.push(data);
                     renderInboxList();
                     if (activeRecipient === data.sender) appendBubble(data.sender, data.text);
