@@ -517,7 +517,8 @@
             },
 init: async function() {
                 const storageKey = 'sb_e2ee_keys_' + currentUser;
-                const savedKeys = localStorage.getItem(storageKey);
+                // STRICT MEMORY UPDATE: Use sessionStorage so keys burn on tab close
+                const savedKeys = sessionStorage.getItem(storageKey);
                 const statusDisplay = document.getElementById('e2eeKeyStatusDisplay');
                 
                 if (savedKeys) {
@@ -531,14 +532,14 @@ init: async function() {
                             statusDisplay.style.display = "inline-block";
                         }
                         return;
-                    } catch (e) { console.warn("Local key cache invalid."); localStorage.removeItem(storageKey); }
+                    } catch (e) { console.warn("Local key cache invalid."); sessionStorage.removeItem(storageKey); }
                 }
                 
                 const res = await fetch('/api/crypto/my_keys');
                 if (res.ok) {
                     const data = await res.json();
                     if (data.encrypted_private_key) {
-                        const pwd = await customPrompt("New device detected.\n\nEnter your Vault Password to unlock your chat history securely:", "", "UNLOCK VAULT");
+                        const pwd = await customPrompt("New session detected.\n\nEnter your Vault Password to unlock your chat history securely:", "", "UNLOCK VAULT");
                         if (!pwd) { await customAlert("History cannot be decrypted without your password. Features may be limited.", "VAULT LOCKED"); return; }
                         
                         try {
@@ -552,7 +553,8 @@ init: async function() {
                             this.privateKey = await crypto.subtle.importKey("jwk", privateJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
                             this.publicKey = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
                             
-                            localStorage.setItem(storageKey, JSON.stringify({ publicJwk, privateJwk }));
+                            // Save to strict session storage
+                            sessionStorage.setItem(storageKey, JSON.stringify({ publicJwk, privateJwk }));
                             if(statusDisplay) {
                                 statusDisplay.innerText = "[KEYS RESTORED SUCCESSFULLY]";
                                 statusDisplay.style.color = "#38bdf8";
@@ -562,10 +564,10 @@ init: async function() {
                         } catch (err) {
                             const resetCmd = await customPrompt("Incorrect password.\n\nType 'RESET' to permanently wipe your Vault and generate a new one (old messages will become unreadable).", "", "DECRYPTION FAILED");
                             if (resetCmd === "RESET") {
-                                localStorage.removeItem(storageKey);
+                                sessionStorage.removeItem(storageKey);
                                 // Bypass return so it flows down and generates new keys
                             } else {
-                                return; // Gracefully exit without crashing UI
+                                return; 
                             }
                         }
                     }
@@ -580,7 +582,8 @@ init: async function() {
                 const publicJwk = await crypto.subtle.exportKey("jwk", this.publicKey);
                 const privateJwk = await crypto.subtle.exportKey("jwk", this.privateKey);
                 
-                localStorage.setItem(storageKey, JSON.stringify({ publicJwk, privateJwk }));
+                // Save to strict session storage
+                sessionStorage.setItem(storageKey, JSON.stringify({ publicJwk, privateJwk }));
                 
                 let encPrivStr = "";
                 if (newPwd) {

@@ -278,14 +278,38 @@ def login():
         
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
+        # Grab the wallet ID alongside the password hash
+        cur.execute("SELECT password_hash, ln_wallet_id FROM users WHERE username = %s", (username,))
         user = cur.fetchone()
-        conn.close()
         
         if user and bcrypt.checkpw(password.encode('utf-8'), user[0].encode('utf-8')):
             session['username'] = username
+            
+            # --- LAZY MINTING: PROVISION MISSING VAULTS ON LOGIN ---
+            wallet_id = user[1]
+            if not wallet_id:
+                try:
+                    ln_url = os.getenv('LNBITS_URL')
+                    ln_key = os.getenv('LNBITS_ADMIN_KEY')
+                    if ln_url and ln_key:
+                        res = requests.post(
+                            f"{ln_url}/api/v1/wallet",
+                            headers={"X-Api-Key": ln_key},
+                            json={"name": f"{username}_vault"},
+                            timeout=5
+                        )
+                        if res.status_code in [200, 201]:
+                            new_wallet_id = res.json().get('id')
+                            cur.execute("UPDATE users SET ln_wallet_id = %s WHERE username = %s", (new_wallet_id, username))
+                            conn.commit()
+                            print(f"[*] Auto-provisioned missing financial vault for {username}.")
+                except Exception as e:
+                    print(f"Lazy minting failed for {username}: {e}")
+            
+            conn.close()
             return redirect(url_for('dashboard'))
         else:
+            conn.close()
             flash('Invalid clearance credentials.', 'error')
             
     return render_template('login.html', title='Login')
