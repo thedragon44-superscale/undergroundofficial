@@ -216,47 +216,20 @@ def init_master_admin():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # Check if user exists and if they are missing a lightning vault
-    cur.execute("SELECT password_hash, ln_wallet_id FROM users WHERE username = %s", (admin_user,))
+    # Just check if the user exists at all
+    cur.execute("SELECT id FROM users WHERE username = %s", (admin_user,))
     existing_user = cur.fetchone()
     
-    if existing_user:
-        current_hash, wallet_id = existing_user
-        # Purge the account if the password hash is legacy OR if the vault failed to generate
-        if not current_hash or not current_hash.startswith('$2b$') or not wallet_id:
-            print(f"[*] Detected broken Admin node for '{admin_user}'. Purging record for upgrade...")
-            cur.execute("DELETE FROM users WHERE username = %s", (admin_user,))
-            conn.commit()
-            existing_user = None
-
-    # Provision fresh account with native bcrypt salt alignment
     if not existing_user:
-        wallet_id = None
-        try:
-            ln_url = os.getenv('LNBITS_URL')
-            ln_key = os.getenv('LNBITS_ADMIN_KEY')
-            if ln_url and ln_key:
-                res = requests.post(
-                    f"{ln_url}/api/v1/wallet",
-                    headers={"X-Api-Key": ln_key},
-                    json={"name": f"{admin_user}_master_vault"},
-                    timeout=5
-                )
-                if res.status_code in [200, 201]:
-                    wallet_id = res.json().get('id')
-        except Exception as e:
-            print(f"Admin LNbits provisioning failed: {e}")
-
-        # Hash explicitly using native bcrypt configuration matching your /login route
         salt = bcrypt.gensalt()
         hashed_pw = bcrypt.hashpw(admin_pass.encode('utf-8'), salt).decode('utf-8')
         
         cur.execute("""
-            INSERT INTO users (username, password_hash, ln_wallet_id) 
-            VALUES (%s, %s, %s)
-        """, (admin_user, hashed_pw, wallet_id))
+            INSERT INTO users (username, password_hash) 
+            VALUES (%s, %s)
+        """, (admin_user, hashed_pw))
         conn.commit()
-        print(f"[*] Master Admin '{admin_user}' Auto-Provisioned with valid bcrypt salt structure.")
+        print(f"[*] Master Admin '{admin_user}' Auto-Provisioned safely.")
         
     conn.close()
 # Example of where to call it at the bottom of your file:
@@ -827,16 +800,109 @@ def stripe_webhook():
 def create_escrow():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     data = request.json
-    amount_cents = int(float(data['amount']) * 100)
+    
+    # We are now routing Satoshis instead of fiat
+    amount_sats = int(data['amount'])
+    receiver = data['receiver']
+    sender = session['username']
+    
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("INSERT INTO escrow_transactions (sender, receiver, amount_cents) VALUES (%s, %s, %s) RETURNING id", 
-                (session['username'], data['receiver'], amount_cents))
-    tx_id = cur.fetchone()[0]
-    conn.commit()
-    conn.close()
-    return jsonify({'id': tx_id})
+    try:
+        # 1. Get Sender's Wallet
+        cur.execute("SELECT ln_wallet_id FROM users WHERE username = %s", (sender,))
+        sender_wallet = cur.fetchone()[0]
+        
+        # 2. Generate Invoice on the Platform Treasury (using Env Admin Key)
+        treasury_key = os.getenv('LNBITS_ADMIN_KEY')
+        inv_res = requests.post(
+            f"{os.getenv('LNBITS_URL')}/api/v1/payments",
+            headers={"X-Api-Key": treasury_key},
+            json={"out": False, "amount": amount_sats, "memo": f"Escrow Lock: {sender} to {receiver}"}
+        )
+        if inv_res.status_code != 201:
+            return jsonify({'error': 'Platform Treasury unavailable'}), 500
+        bolt11 = inv_res.json().get('payment_request')
+        
+        # 3. Pay Invoice from Sender's Vault to lock the funds
+        pay_res = requests.post(
+            f"{os.getenv('LNBITS_URL')}/api/v1/payments",
+            headers={"X-Api-Key": sender_wallet},
+            json={"out": True, "bolt11": bolt11}
+        )
+        if pay_res.status_code != 201:
+            return jsonify({'error': 'Insufficient funds in sender Vault'}), 400
+        
+        # 4. Record Escrow in the Database
+        cur.execute("INSERT INTO escrow_transactions (sender, receiver, amount_cents, status) VALUES (%s, %s, %s, 'held_in_escrow') RETURNING id", 
+                    (sender, receiver, amount_sats))
+        tx_id = cur.fetchone()[0]
+        conn.commit()
+        return jsonify({'id': tx_id, 'status': 'held_in_escrow'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
+@app.route('/api/escrow/release', methods=['POST'])
+def release_escrow():
+    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
+    tx_id = request.json.get('id')
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # 1. Lock row to prevent race conditions
+        cur.execute("SELECT amount_cents, sender, receiver, status FROM escrow_transactions WHERE id = %s FOR UPDATE", (tx_id,))
+        tx = cur.fetchone()
+        
+        if not tx or tx[1] != session['username'] or tx[3] != 'held_in_escrow':
+            return jsonify({'error': 'Unauthorized or invalid state'}), 403
+            
+        total_sats = int(tx[0])
+        receiver = tx[2]
+        
+        # Skim the 5% Platform Tax
+        platform_cut = int(total_sats * 0.05)
+        release_amount = total_sats - platform_cut
+        
+        # 2. Get Receiver's Wallet
+        cur.execute("SELECT ln_wallet_id FROM users WHERE username = %s", (receiver,))
+        receiver_wallet_row = cur.fetchone()
+        if not receiver_wallet_row or not receiver_wallet_row[0]:
+            return jsonify({'error': 'Receiver vault offline'}), 400
+        receiver_wallet = receiver_wallet_row[0]
+        
+        # 3. Generate Invoice on Receiver Wallet
+        inv_res = requests.post(
+            f"{os.getenv('LNBITS_URL')}/api/v1/payments",
+            headers={"X-Api-Key": receiver_wallet},
+            json={"out": False, "amount": release_amount, "memo": f"Escrow Release TX-{tx_id}"}
+        )
+        bolt11 = inv_res.json().get('payment_request')
+        
+        # 4. Pay Invoice from Platform Treasury
+        treasury_key = os.getenv('LNBITS_ADMIN_KEY')
+        pay_res = requests.post(
+            f"{os.getenv('LNBITS_URL')}/api/v1/payments",
+            headers={"X-Api-Key": treasury_key},
+            json={"out": True, "bolt11": bolt11}
+        )
+        
+        if pay_res.status_code == 201:
+            cur.execute("INSERT INTO platform_treasury (source_escrow_id, amount_collected) VALUES (%s, %s)", (tx_id, platform_cut))
+            cur.execute("UPDATE escrow_transactions SET status = 'released_to_receiver' WHERE id = %s", (tx_id,))
+            conn.commit()
+            return jsonify({'status': 'success'})
+        else:
+            return jsonify({'error': 'Treasury routing failed'}), 500
+            
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 @app.route('/api/escrow/list')
 def list_escrow():
     if 'username' not in session: return jsonify([]), 401
@@ -848,38 +914,6 @@ def list_escrow():
     conn.close()
     return jsonify(txs)
 
-@app.route('/api/escrow/release', methods=['POST'])
-def release_escrow():
-    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
-    tx_id = request.json.get('id')
-    
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        # 1. Lock the row to prevent double-spending
-        cur.execute("SELECT amount_cents, sender, status FROM escrow_transactions WHERE id = %s FOR UPDATE", (tx_id,))
-        tx = cur.fetchone()
-        
-        # Verify authorization and state
-        if not tx or tx[1] != session['username'] or tx[2] != 'held_in_escrow':
-            return jsonify({'error': 'Invalid transaction or unauthorized'}), 403
-            
-        total_cents = int(tx[0])
-        
-        # 2. Calculate the 5% Platform Tax
-        platform_cut = int(total_cents * 0.05)
-        
-        # 3. Execute atomic ledger updates
-        cur.execute("INSERT INTO platform_treasury (source_escrow_id, amount_collected) VALUES (%s, %s)", (tx_id, platform_cut))
-        cur.execute("UPDATE escrow_transactions SET status = 'released_to_receiver' WHERE id = %s", (tx_id,))
-        
-        conn.commit()
-        return jsonify({'status': 'success'})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({'error': 'Transaction processing failed'}), 500
-    finally:
-        conn.close()
 
 @app.route('/api/stripe/onramp', methods=['POST'])
 def stripe_onramp():
