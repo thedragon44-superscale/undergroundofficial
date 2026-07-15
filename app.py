@@ -801,50 +801,25 @@ def create_escrow():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     data = request.json
     
-    # We are now routing Satoshis instead of fiat
-    amount_sats = int(data['amount'])
+    try:
+        # Cast to integer to prevent float injections
+        amount_sats = int(data['amount'])
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid amount format'}), 400
+
+    # --- THE PATCH: PREVENT NEGATIVE & ZERO AMOUNTS ---
+    if amount_sats <= 0:
+        return jsonify({'error': 'Amount must be strictly greater than zero.'}), 400
+    if amount_sats > 100000000: # Optional: Cap at 1 full Bitcoin to prevent overflow attacks
+        return jsonify({'error': 'Amount exceeds platform maximum.'}), 400
+        
     receiver = data['receiver']
     sender = session['username']
     
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        # 1. Get Sender's Wallet
-        cur.execute("SELECT ln_wallet_id FROM users WHERE username = %s", (sender,))
-        sender_wallet = cur.fetchone()[0]
-        
-        # 2. Generate Invoice on the Platform Treasury (using Env Admin Key)
-        treasury_key = os.getenv('LNBITS_ADMIN_KEY')
-        inv_res = requests.post(
-            f"{os.getenv('LNBITS_URL')}/api/v1/payments",
-            headers={"X-Api-Key": treasury_key},
-            json={"out": False, "amount": amount_sats, "memo": f"Escrow Lock: {sender} to {receiver}"}
-        )
-        if inv_res.status_code != 201:
-            return jsonify({'error': 'Platform Treasury unavailable'}), 500
-        bolt11 = inv_res.json().get('payment_request')
-        
-        # 3. Pay Invoice from Sender's Vault to lock the funds
-        pay_res = requests.post(
-            f"{os.getenv('LNBITS_URL')}/api/v1/payments",
-            headers={"X-Api-Key": sender_wallet},
-            json={"out": True, "bolt11": bolt11}
-        )
-        if pay_res.status_code != 201:
-            return jsonify({'error': 'Insufficient funds in sender Vault'}), 400
-        
-        # 4. Record Escrow in the Database
-        cur.execute("INSERT INTO escrow_transactions (sender, receiver, amount_cents, status) VALUES (%s, %s, %s, 'held_in_escrow') RETURNING id", 
-                    (sender, receiver, amount_sats))
-        tx_id = cur.fetchone()[0]
-        conn.commit()
-        return jsonify({'id': tx_id, 'status': 'held_in_escrow'})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
-
+        # ... (Leave the rest of the existing try/except block exactly as it is) ...
 @app.route('/api/escrow/release', methods=['POST'])
 def release_escrow():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
@@ -903,6 +878,66 @@ def release_escrow():
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
+
+
+# --- STRIPE WEBHOOK: PRO UPGRADES & IDEMPOTENCY ---
+@app.route('/webhook', methods=['POST'])
+def stripe_webhook():
+    payload = request.data
+    sig_header = request.headers.get('Stripe-Signature')
+    
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, os.getenv('STRIPE_WEBHOOK_SECRET')
+        )
+    except ValueError as e:
+        return 'Invalid payload', 400
+    except stripe.error.SignatureVerificationError as e:
+        return 'Invalid signature', 400
+        
+    event_id = event['id']
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Create tracking table if it doesn't exist (Lazy Migration)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS processed_webhooks (
+                event_id VARCHAR(255) PRIMARY KEY,
+                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Check if we have already seen this exact event
+        cur.execute("SELECT event_id FROM processed_webhooks WHERE event_id = %s", (event_id,))
+        if cur.fetchone():
+            print(f"[*] Webhook {event_id} already processed. Dropping duplicate.")
+            return jsonify(success=True)
+            
+        # Process the event
+        if event['type'] == 'checkout.session.completed':
+            session_obj = event['data']['object']
+            username = session_obj.get('client_reference_id')
+            
+            if username:
+                # Upgrade user to the Shadow Registry (Pro)
+                cur.execute("UPDATE users SET is_pro = TRUE WHERE username = %s", (username,))
+                print(f"[*] {username} upgraded to Pro via Stripe checkout.")
+        
+        # Log the event ID so it can never be processed again
+        cur.execute("INSERT INTO processed_webhooks (event_id) VALUES (%s)", (event_id,))
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Webhook database error: {e}")
+        return str(e), 500
+    finally:
+        conn.close()
+        
+    return jsonify(success=True)
+
 @app.route('/api/escrow/list')
 def list_escrow():
     if 'username' not in session: return jsonify([]), 401
