@@ -25,6 +25,7 @@ CORS(app)
 
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -172,6 +173,15 @@ def init_db():
         )
     ''')
 
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS platform_treasury (
+            id SERIAL PRIMARY KEY,
+            source_escrow_id INTEGER REFERENCES escrow_transactions(id) ON DELETE SET NULL,
+            amount_collected INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     conn.commit()
 # ... (existing table creations) ...
 
@@ -184,6 +194,12 @@ def init_db():
 
     try:
         cur.execute("ALTER TABLE users ADD COLUMN invited_by VARCHAR(50)")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN is_pro BOOLEAN DEFAULT FALSE")
         conn.commit()
     except Exception:
         conn.rollback()
@@ -752,6 +768,37 @@ def release_pool(pool_id):
 
 # --- FINANCIALS: 1-ON-1 ESCROW & STRIPE ---
 
+@app.route('/api/v1/payments/webhook', methods=['POST'])
+def stripe_webhook():
+    payload = request.data
+    sig_header = request.headers.get('Stripe-Signature')
+    
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except Exception as e:
+        return jsonify({'status': 'invalid payload or signature'}), 400
+
+    if event['type'] == 'checkout.session.completed':
+        session_obj = event['data']['object']
+        purpose = session_obj.get('metadata', {}).get('purpose')
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            if purpose == 'pro_upgrade':
+                username = session_obj.get('metadata', {}).get('username')
+                cur.execute("UPDATE users SET is_pro = TRUE WHERE username = %s", (username,))
+            elif purpose == 'fund_escrow':
+                escrow_id = session_obj.get('metadata', {}).get('escrow_id')
+                cur.execute("UPDATE escrow_transactions SET status = 'held_in_escrow' WHERE id = %s", (escrow_id,))
+            conn.commit()
+        except:
+            conn.rollback()
+        finally:
+            conn.close()
+
+    return jsonify({'success': True}), 200
+
 @app.route('/api/escrow/create', methods=['POST'])
 def create_escrow():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
@@ -781,15 +828,34 @@ def list_escrow():
 def release_escrow():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     tx_id = request.json.get('id')
+    
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT sender, status FROM escrow_transactions WHERE id = %s", (tx_id,))
-    tx = cur.fetchone()
-    if tx and tx[0] == session['username'] and tx[1] == 'held_in_escrow':
+    try:
+        # 1. Lock the row to prevent double-spending
+        cur.execute("SELECT amount_cents, sender, status FROM escrow_transactions WHERE id = %s FOR UPDATE", (tx_id,))
+        tx = cur.fetchone()
+        
+        # Verify authorization and state
+        if not tx or tx[1] != session['username'] or tx[2] != 'held_in_escrow':
+            return jsonify({'error': 'Invalid transaction or unauthorized'}), 403
+            
+        total_cents = int(tx[0])
+        
+        # 2. Calculate the 5% Platform Tax
+        platform_cut = int(total_cents * 0.05)
+        
+        # 3. Execute atomic ledger updates
+        cur.execute("INSERT INTO platform_treasury (source_escrow_id, amount_collected) VALUES (%s, %s)", (tx_id, platform_cut))
         cur.execute("UPDATE escrow_transactions SET status = 'released_to_receiver' WHERE id = %s", (tx_id,))
+        
         conn.commit()
-    conn.close()
-    return jsonify({'status': 'success'})
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': 'Transaction processing failed'}), 500
+    finally:
+        conn.close()
 
 @app.route('/api/stripe/onramp', methods=['POST'])
 def stripe_onramp():
@@ -810,18 +876,29 @@ def stripe_checkout():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     try:
         data = request.json
-        amount_cents = int(float(data['amount']) * 100)
+        purpose = data.get('purpose', 'fund_escrow')
+        amount_cents = int(float(data.get('amount', 9.99)) * 100) # Default to 9.99 for Pro
+        
+        # 1. Build the cryptographic metadata for the Webhook
+        metadata = {'username': session['username'], 'purpose': purpose}
+        if purpose == 'fund_escrow':
+            metadata['escrow_id'] = data['id']
+            product_name = f'Escrow Funding TX-{data["id"]}'
+        else:
+            product_name = 'StreetBook Pro Authorization'
+
+        # 2. Generate the Session
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],
-            line_items=[{'price_data': {'currency': 'usd', 'product_data': {'name': f'Escrow Funding TX-{data["id"]}'}, 'unit_amount': amount_cents}, 'quantity': 1}],
+            line_items=[{'price_data': {'currency': 'usd', 'product_data': {'name': product_name}, 'unit_amount': amount_cents}, 'quantity': 1}],
             mode='payment',
-            success_url=request.host_url + 'dashboard',
-            cancel_url=request.host_url + 'dashboard'
+            metadata=metadata, # <--- The Webhook Armor
+            success_url=request.host_url + 'dashboard?payment=success',
+            cancel_url=request.host_url + 'dashboard?payment=cancelled'
         )
         return jsonify({'url': checkout_session.url})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
 
 # --- FINANCIALS: LIGHTNING CRYPTO VAULT & DIRECT TRANSFERS ---
 
