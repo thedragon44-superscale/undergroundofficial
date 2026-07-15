@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>StreetBook Hub</title>
+    <title>Street Code 101 Hub</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0b1120">
     <!-- Pointing to your perfectly squared image to prevent distortion -->
-    <link rel="apple-touch-icon" href="/static/streetbook_logo_2.png">
+    <link rel="apple-touch-icon" href="/static/streetbook_logo.png">
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://crypto-js.stripe.com/crypto-onramp-outer.js"></script>
     <style>
@@ -315,7 +315,7 @@
                         <span style="color:#38bdf8;">📖</span> Quick Start & Security Guide <span style="font-size:0.8rem; font-weight:400; color:#94a3b8;">(Click to expand)</span> <span style="margin-left:auto; color:#94a3b8; font-size:0.8rem;">🔽</span>
                     </summary>
                     <div style="margin-top:15px; font-size:0.9rem; color:#cbd5e1; line-height:1.6; cursor:default;">
-                        <b>1. Total Encryption:</b> StreetBook utilizes True End-to-End Encryption (E2EE) built directly into your browser via WebCrypto. Your messages are encrypted <i>before</i> they leave your device using a master key locked by your Vault Password. The central servers literally cannot read your Private Messages or Gang Chats. Ever.<br><br>
+                        <b>1. Total Encryption:</b> Street Code 101 utilizes True End-to-End Encryption (E2EE) built directly into your browser via WebCrypto. Your messages are encrypted <i>before</i> they leave your device using a master key locked by your Vault Password. The central servers literally cannot read your Private Messages or Gang Chats. Ever.<br><br>
                         <b>2. Invite Ledger:</b> The network is closed. You must use the Terminal below to mint single-use registration keys. You are mathematically linked to the operators you invite. If they act out of line, your node reputation is impacted.<br><br>
                         <b>3. Financial Anonymity:</b> The Financial Vault runs on the Bitcoin Lightning Network. You can instantly route funds to other operators using the "Direct Transfer" button, or request funds anonymously inside chat channels via the Escrow feature. <br><br>
                         <i>Note on Vault Generation:</i> Vault generation is instant upon registration. If your Vault says "Offline", your server API keys were missing during your account creation. You must mint an invite key, log out, and create a fresh profile to activate it.<br><br>
@@ -326,13 +326,13 @@
                 <!-- PWA Install Container -->
                 <div id="pwaInstallContainer" style="display:none; background:rgba(56, 189, 248, 0.1); padding:20px; border-radius:12px; border:1px solid rgba(56, 189, 248, 0.3); margin-bottom:24px; text-align:center;">
                     <h4 style="margin:0 0 10px 0; color:#38bdf8;">📲 Install Native App</h4>
-                    <p style="font-size:0.85rem; color:#cbd5e1; margin:0 0 15px 0;">Install StreetBook directly to your home screen for fullscreen native app access without the browser URL bar.</p>
+                    <p style="font-size:0.85rem; color:#cbd5e1; margin:0 0 15px 0;">Install Street Code 101 directly to your home screen for fullscreen native app access without the browser URL bar.</p>
                     
                     <button id="pwaInstallBtn" class="panel-btn primary" style="box-shadow: 0 4px 15px rgba(56,189,248,0.4);">Install Android App</button>
                     
                     <div id="iosPwaHint" style="display:none; font-size:0.85rem; color:#e2e8f0; background:rgba(0,0,0,0.3); padding:15px; border-radius:8px; text-align:left; line-height:1.5;">
                         <strong style="color:#10b981;">🍎 iOS Apple Instructions:</strong><br>
-                        Apple strictly blocks automatic app installations. To install StreetBook on your iPhone or iPad:<br>
+                        Apple strictly blocks automatic app installations. To install Street Code 101 on your iPhone or iPad:<br>
                         1. Open this page in the <b>Safari</b> browser.<br>
                         2. Tap the <b>Share Icon</b> (the square with the arrow pointing up at the bottom of your screen).<br>
                         3. Scroll down the list and tap <b>"Add to Home Screen"</b>.<br>
@@ -1406,6 +1406,62 @@ init: async function() {
 
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('/static/sw.js');
 
+// --- MOBILE GESTURE ENGINE: SWIPE & PULL-TO-REFRESH ---
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchEndX = 0;
+        let touchEndY = 0;
+        const SWIPE_THRESHOLD = 75; 
+
+        // Match your exact tab order
+        const tabSequence = ['chatPanel', 'networkPanel', 'profilePanel', 'utilPanel'];
+
+        document.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, { passive: true });
+
+        document.addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            touchEndY = e.changedTouches[0].screenY;
+            handleMobileGestures();
+        }, { passive: true });
+
+        function handleMobileGestures() {
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            const activePanel = document.querySelector('.view-panel.active');
+            
+            if (!activePanel) return;
+
+            // 1. Pull-to-Refresh Logic (Swipe down from the absolute top)
+            if (deltaY > 120 && Math.abs(deltaX) < 50) {
+                if (activePanel.scrollTop <= 0) {
+                    location.reload();
+                    return;
+                }
+            }
+
+            // 2. Horizontal Swipe Navigation Logic
+            if (Math.abs(deltaX) > SWIPE_THRESHOLD && Math.abs(deltaY) < 60) {
+                let currentIndex = tabSequence.indexOf(activePanel.id);
+                if (currentIndex === -1) return;
+
+                const tabButtons = document.querySelectorAll('.tab-btn');
+
+                if (deltaX < 0 && currentIndex < tabSequence.length - 1) {
+                    // Swiped Left -> Move Right
+                    const nextPanel = tabSequence[currentIndex + 1];
+                    switchTab(nextPanel, tabButtons[currentIndex + 1]);
+                    if (nextPanel === 'profilePanel') openProfile(currentUser);
+                } else if (deltaX > 0 && currentIndex > 0) {
+                    // Swiped Right -> Move Left
+                    const prevPanel = tabSequence[currentIndex - 1];
+                    switchTab(prevPanel, tabButtons[currentIndex - 1]);
+                    if (prevPanel === 'profilePanel') openProfile(currentUser);
+                }
+            }
+        }
         // --- BOOT SEQUENCE ---
         window.onload = async function() {
             if(window.location.pathname === "/dashboard") { 
