@@ -1768,12 +1768,11 @@
             }
         }
 
-        // --- BOOT SEQUENCE ---
+       // --- BOOT SEQUENCE ---
         window.onload = async function() {
             if(window.location.pathname === "/dashboard") { 
                 try {
-                    // 1. Instantly spin up non-blocking network & UI frameworks
-                    setupSocketListeners(); 
+                    // 1. Instantly spin up non-blocking UI frameworks (Skipping Chat Socket for now)
                     loadFeed();
                     loadInviteLedger();
                     loadEscrow();
@@ -1795,17 +1794,20 @@
                     console.error("[CORE UI ERROR] Failed to initialize layout components:", uiErr);
                 }
 
-                // 3. Initialize zero-knowledge encryption engine asynchronously 
-                // This prevents password dialog wait-states from freezing the UI thread
+                // 3. Initialize Vault FIRST, then connect the Matrix
                 setTimeout(async () => {
                     try {
-                        await E2EE.init();
+                        // The code completely halts here until the user types their correct password
+                        await E2EE.init(); 
+                        
+                        // NOW we establish the connection and pull history, ensuring keys are ready
+                        setupSocketListeners(); 
                     } catch (cryptoErr) {
                         console.error("[CRYPTOGRAPHIC ERROR] Vault engine failed to mount:", cryptoErr);
                     }
                 }, 100);
             }
-        };
+        }; 
     </script>
 </body>
 </html>
