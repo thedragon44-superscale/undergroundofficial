@@ -27,7 +27,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-fallback")
 CORS(app)
 
-@app.route('/health')
+@app.route('/health', methods=['GET', 'HEAD'])
 def health_check():
     return "OK", 200
 
