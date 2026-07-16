@@ -14,6 +14,7 @@ from werkzeug.utils import secure_filename
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from pywebpush import webpush, WebPushException
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -68,6 +69,46 @@ def send_system_email(to_address, subject, body_html):
     except Exception as e:
         print(f"[-] Email Dispatch Failed: {e}")
         return False
+
+# --- WEB PUSH NOTIFICATION ENGINE ---
+def send_web_push(username, title, body):
+    vapid_private_key = os.getenv('VAPID_PRIVATE_KEY')
+    vapid_claim_email = os.getenv('VAPID_CLAIM_EMAIL', 'mailto:admin@streetcode101.com')
+    
+    if not vapid_private_key:
+        return False
+        
+    conn = get_db_connection()
+    cur = conn.cursor()
+    # Grab every device this user has registered
+    cur.execute("SELECT id, subscription_info FROM push_subscriptions WHERE username = %s", (username,))
+    subs = cur.fetchall()
+    
+    payload = json.dumps({
+        "title": title,
+        "body": body,
+        "icon": "/static/streetbook_logo.png",
+        "url": "/dashboard"
+    })
+    
+    for sub in subs:
+        sub_id = sub[0]
+        try:
+            sub_data = json.loads(sub[1])
+            webpush(
+                subscription_info=sub_data,
+                data=payload,
+                vapid_private_key=vapid_private_key,
+                vapid_claims={"sub": vapid_claim_email}
+            )
+        except WebPushException as ex:
+            # If the device unsubscribed or the token expired, delete it from the database
+            if ex.response and ex.response.status_code in [404, 410]:
+                cur.execute("DELETE FROM push_subscriptions WHERE id = %s", (sub_id,))
+                
+    conn.commit()
+    conn.close()
+    return True
 
 def init_db():
     conn = get_db_connection()
@@ -211,6 +252,16 @@ def init_db():
             id SERIAL PRIMARY KEY,
             source_escrow_id INTEGER REFERENCES escrow_transactions(id) ON DELETE SET NULL,
             amount_collected INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+# 8. Web Push Device Subscriptions
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) NOT NULL,
+            subscription_info TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -1072,6 +1123,30 @@ def api_wallet_transfer():
     else:
         return jsonify({'error': 'Insufficient funds or routing failure.'}), 400
 
+
+@app.route('/api/push/subscribe', methods=['POST'])
+def push_subscribe():
+    if 'username' not in session: 
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    sub_info = request.json
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Avoid duplicate subscriptions for the exact same device
+        sub_str = json.dumps(sub_info)
+        cur.execute("SELECT id FROM push_subscriptions WHERE username = %s AND subscription_info = %s", (session['username'], sub_str))
+        if not cur.fetchone():
+            cur.execute("INSERT INTO push_subscriptions (username, subscription_info) VALUES (%s, %s)", 
+                        (session['username'], sub_str))
+            conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 # --- REAL-TIME MESH (WEBSOCKETS) & BACKGROUND WORKERS ---
 
