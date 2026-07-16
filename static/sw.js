@@ -17,3 +17,10 @@ self.addEventListener('fetch', (event) => {
         })
     );
 });
+// --- OTA UPDATE OVERRIDE ---
+// Listen for the signal from the frontend to hot-swap the active worker
+self.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});

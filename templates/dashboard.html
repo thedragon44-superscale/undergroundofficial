@@ -181,7 +181,11 @@
     </style>
 </head>
 <body>
-
+<!-- OTA UPDATE PROMPT -->
+    <div id="pwaUpdatePrompt" style="display:none; position:fixed; bottom:85px; left:50%; transform:translateX(-50%); background:#38bdf8; color:#0f172a; padding:12px 20px; border-radius:30px; font-weight:700; box-shadow:0 4px 20px rgba(56,189,248,0.5); z-index:10000; align-items:center; gap:15px; border: 1px solid #7dd3fc;">
+        <span>🔄 Matrix Update Available</span>
+        <button onclick="applyPwaUpdate()" style="background:#0f172a; color:#38bdf8; border:none; padding:6px 12px; border-radius:15px; font-weight:bold; cursor:pointer; transition:all 0.2s;">Install</button>
+    </div>
     <!-- CUSTOM DIALOG INTERCEPTORS -->
     <div class="custom-dialog-overlay" id="customDialogOverlay">
         <div class="custom-dialog-box">
@@ -1514,7 +1518,39 @@
             }
         });
 
-        if ('serviceWorker' in navigator) navigator.serviceWorker.register('/static/sw.js');
+        // --- PWA SERVICE WORKER & OTA UPDATE ENGINE ---
+        let newWorker;
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js').then(reg => {
+                // Listen for new code deployments in the background
+                reg.addEventListener('updatefound', () => {
+                    newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        // If the new worker is installed and a previous one exists, trigger the UI prompt
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            document.getElementById('pwaUpdatePrompt').style.display = 'flex';
+                        }
+                    });
+                });
+            }).catch(err => console.error("Service Worker Registration Fault:", err));
+
+            // When the new worker takes control, automatically refresh the matrix
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    window.location.reload();
+                    refreshing = true;
+                }
+            });
+        }
+
+        // Triggered when the user clicks "Install" on the floating pill
+        function applyPwaUpdate() {
+            if (newWorker) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+            document.getElementById('pwaUpdatePrompt').style.display = 'none';
+        }
 
 // --- ADVANCED 1:1 MOBILE GESTURE ENGINE ---
         let touchStartX = 0, touchStartY = 0;
