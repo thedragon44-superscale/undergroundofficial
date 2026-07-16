@@ -1,3 +1,4 @@
+const CACHE_VERSION = 'v1.1';
 const CACHE_NAME = 'streetbook-v1';
 const ASSETS_TO_CACHE = [
     '/static/streetbook_logo.png',
