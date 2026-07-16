@@ -387,6 +387,15 @@
                         <button id="triggerOnrampBtn" class="panel-btn primary" style="width:100%; display:none; margin-bottom:15px;" onclick="launchStripeOnramp()">Fiat Onramp ($USD)</button>
                         <div id="stripe-onramp-container" style="display:none; margin-top:15px; border-radius:8px; overflow:hidden;"></div>
                     </div>
+<!-- Shadow Registry (Pro Tier) Node -->
+                    <div style="background:rgba(15, 23, 42, 0.5); border:1px solid rgba(245, 158, 11, 0.3); border-radius:12px; padding:20px; text-align:center; display:flex; flex-direction:column; justify-content:center;">
+                        <h4 style="margin:0 0 10px 0; color:#f59e0b; text-transform:uppercase; letter-spacing:1px; text-shadow:0 0 10px rgba(245,158,11,0.3);">Shadow Registry</h4>
+                        <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:15px; line-height:1.5;">
+                            Upgrade to <b>Street Code Pro</b> to access the elite secondary directory, advanced market intel, and verified network status.
+                        </div>
+                        <div style="font-size:1.8rem; font-weight:700; color:#f8fafc; margin-bottom:15px;">$9.99<span style="font-size:0.9rem; color:#94a3b8; font-weight:400;"> /mo</span></div>
+                        <button id="proUpgradeBtn" class="panel-btn" style="width:100%; background:#f59e0b; color:#0f172a; border:none; font-weight:700; box-shadow:0 4px 15px rgba(245, 158, 11, 0.2);" onclick="upgradeToPro()">Authorize Upgrade</button>
+                    </div>
                 </div>
 
 <div style="margin-top:20px; background:rgba(15, 23, 42, 0.5); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:20px;">
@@ -1350,6 +1359,9 @@
 
         // --- NEW PRO UPGRADE FUNCTION ---
         function upgradeToPro() {
+            const btn = document.getElementById('proUpgradeBtn');
+            if(btn) { btn.innerText = "Connecting to Gateway..."; btn.disabled = true; }
+            
             fetch('/api/stripe/checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1363,10 +1375,16 @@
                 if(data.url) {
                     window.location.href = data.url; 
                 } else {
-                    alert("Routing failure: " + data.error);
+                    customAlert("Routing failure: " + data.error, "STRIPE ERROR");
+                    if(btn) { btn.innerText = "Authorize Upgrade"; btn.disabled = false; }
                 }
+            })
+            .catch(err => {
+                customAlert("Network error reaching Stripe.", "SYSTEM FAULT");
+                if(btn) { btn.innerText = "Authorize Upgrade"; btn.disabled = false; }
             });
         }
+
         function filterGlobalUsers() {
             const query = document.getElementById('globalUserSearch').value.toLowerCase().trim();
             const container = document.getElementById('globalSearchResultsContainer');
