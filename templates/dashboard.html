@@ -774,19 +774,35 @@
         }
 
         function launchStripeOnramp() {
-            document.getElementById('triggerOnrampBtn').style.display = "none";
-            const container = document.getElementById('stripe-onramp-container');
-            container.style.display = "block";
-            container.innerHTML = "<div style='padding:30px; text-align:center; color:#38bdf8; font-size:0.9rem; border:1px dashed rgba(56,189,248,0.3); border-radius:8px;'>Negotiating secure client secret...</div>";
-            fetch('/api/stripe/onramp', { method: 'POST' }).then(res => res.json()).then(data => {
-                if(data.error) { container.innerHTML = "<div style='padding:20px; color:#f87171; font-size:0.85rem;'><b>⚠️ Stripe Gateway Rejected:</b><br>" + data.error + "</div>"; return; }
-                container.innerHTML = ""; 
-                const stripeOnramp = StripeOnramp('pk_test_placeholder_key_replace_me'); 
-                const session = stripeOnramp.createSession({ clientSecret: data.client_secret });
-                session.mount('#stripe-onramp-container');
+            const btn = document.getElementById('triggerOnrampBtn');
+            btn.innerText = "Connecting to Stripe Gateway...";
+            btn.disabled = true;
+            
+            fetch('/api/stripe/checkout', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    purpose: 'fund_vault', 
+                    amount: 50.00 
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.url) {
+                    // Redirect the user to the secure Stripe Checkout page
+                    window.location.href = data.url; 
+                } else {
+                    customAlert("Routing failure: " + data.error, "STRIPE ERROR");
+                    btn.innerText = "Fiat Onramp ($USD)";
+                    btn.disabled = false;
+                }
+            })
+            .catch(err => {
+                customAlert("Network error reaching Stripe.", "SYSTEM FAULT");
+                btn.innerText = "Fiat Onramp ($USD)";
+                btn.disabled = false;
             });
         }
-
         // --- CORE UI ROUTING & HELPERS ---
         function switchTab(panelId, btnElement) {
             document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
