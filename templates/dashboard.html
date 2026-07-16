@@ -497,6 +497,13 @@
         let activeGroupObject = null;
         let activeProfileUser = "";
         const DEFAULT_AVATAR_CDN = "/static/default.png";
+// --- GLOBAL BROKEN IMAGE CATCHER ---
+        // If any avatar link in the database is dead or broken, instantly swap it to the default icon
+        document.addEventListener('error', function(event) {
+            if (event.target.tagName.toLowerCase() === 'img') {
+                event.target.src = DEFAULT_AVATAR_CDN;
+            }
+        }, true); // The 'true' is critical here so it captures the error before the browser renders the blue box
         
         const isLocalNetwork = window.location.hostname === "localhost" || 
                               window.location.hostname === "127.0.0.1" || 
