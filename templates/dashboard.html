@@ -940,10 +940,20 @@
         // --- WEBSOCKET MESH & CHAT LOGIC ---
         function setupSocketListeners() {
             socket = new WebSocket(wsHost);
+            
             socket.onopen = function() { 
                 socket.send(JSON.stringify({ username: currentUser }));
                 loadNetworkUsers();
+                
+                // --- THE KEEPALIVE HEARTBEAT ---
+                // Ping Render every 45 seconds so it doesn't kill the idle connection
+                setInterval(() => {
+                    if (socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({ type: 'heartbeat' }));
+                    }
+                }, 45000);
             };
+
             socket.onmessage = async function(event) {
                 const data = JSON.parse(event.data);
                 if (data.is_presence) { onlineUsersList = data.online_users || []; renderInboxList(); return; }
@@ -969,6 +979,20 @@
                     renderInboxList();
                     if (activeRecipient === data.sender) appendBubble(data.sender, data.text);
                 }
+            };
+
+            // --- THE AUTO-RECONNECT ENGINE ---
+            // If the connection drops (network switch, Render timeout), instantly revive it
+            socket.onclose = function() {
+                console.log("[SYSTEM] Matrix connection lost. Reconnecting in 3 seconds...");
+                setTimeout(() => {
+                    setupSocketListeners();
+                }, 3000);
+            };
+            
+            socket.onerror = function() {
+                // Close the broken socket to trigger the onclose reconnect loop
+                socket.close();
             };
         }
 
