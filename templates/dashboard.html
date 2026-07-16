@@ -309,6 +309,12 @@
             <!-- PROFILE WALL PANEL -->
             <div id="profilePanel" class="view-panel">
                 <div style="max-width: 600px; margin: 0 auto; background:rgba(15, 23, 42, 0.6); padding:30px; border-radius:12px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
+<!-- Notification Arming Button -->
+                    <div style="text-align: center; padding: 20px 0;">
+                        <button class="panel-btn" style="background:rgba(16, 185, 129, 0.1); color:#10b981; border:1px solid rgba(16, 185, 129, 0.3); width:100%; max-width: 300px; padding: 12px; font-weight: bold;" onclick="enablePushNotifications()">
+                            🔔 Arm Background Alerts
+                        </button>
+                    </div>
                     <div style="position:relative; display:inline-block;">
                         <img src="" id="profPicImg" style="width:120px; height:120px; border-radius:50%; object-fit:cover; border:3px solid #38bdf8; box-shadow:0 0 20px rgba(56,189,248,0.3); margin-bottom:15px;">
                         <!-- Added ID here -->
@@ -1634,6 +1640,61 @@
                 newPanel.style.opacity = '1';
             }, 10);
         }
+
+// --- WEB PUSH REGISTRATION ENGINE ---
+        // IMPORTANT: Paste your exact VAPID Public Key between the quotes below
+        const VAPID_PUBLIC_KEY = 'BNXiIMjsQY2ur03pYhm6YUDKrpBRtACmbz92EHwVriI6dsvbekQYLmz_9yipEsHYZ7PU7vRn1eAZXxbphwsrVMQ';
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        async function enablePushNotifications() {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                customAlert("Your browser does not support secure push notifications.", "SYSTEM NOTICE");
+                return;
+            }
+
+            try {
+                // Ask the user for OS-level permission
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    customAlert("Permission denied. You will not receive background alerts.", "ALERTS DISABLED");
+                    return;
+                }
+
+                // Register the device with the Service Worker
+                const registration = await navigator.serviceWorker.ready;
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                });
+
+                // Send the cryptographic subscription object to our Python backend
+                const res = await fetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(subscription)
+                });
+
+                if (res.ok) {
+                    customAlert("Device successfully linked. You will now receive background alerts for secure messages.", "NOTIFICATIONS ARMED");
+                } else {
+                    customAlert("Failed to register device with the server.", "SYSTEM ERROR");
+                }
+            } catch (error) {
+                console.error("Push Registration Fault:", error);
+                customAlert("An error occurred while arming notifications.", "SYSTEM ERROR");
+            }
+        }
+
         // --- BOOT SEQUENCE ---
         window.onload = async function() {
             if(window.location.pathname === "/dashboard") { 
