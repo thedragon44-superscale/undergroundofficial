@@ -11,6 +11,9 @@ import requests
 import uuid
 import boto3
 from werkzeug.utils import secure_filename
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -35,6 +38,36 @@ connected_clients = {}
 
 def get_db_connection():
     return psycopg2.connect(os.getenv("NEON_DATABASE_URL"))
+
+# --- AUTOMATED EMAIL ENGINE ---
+def send_system_email(to_address, subject, body_html):
+    # Pulls credentials from your Render Environment Variables
+    smtp_host = os.getenv('SMTP_HOST')
+    smtp_port = int(os.getenv('SMTP_PORT', 587))
+    smtp_user = os.getenv('SMTP_USER')
+    smtp_pass = os.getenv('SMTP_PASS')
+    
+    if not smtp_host or not smtp_user:
+        print("[-] SMTP credentials missing. Email aborted.")
+        return False
+        
+    msg = MIMEMultipart()
+    # The domain here must exactly match your verified SMTP provider domain
+    msg['From'] = "Street Code 101 <noreply@streetcode101.com>"
+    msg['To'] = to_address
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body_html, 'html'))
+    
+    try:
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"[-] Email Dispatch Failed: {e}")
+        return False
 
 def init_db():
     conn = get_db_connection()
