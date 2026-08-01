@@ -13,3 +13,6 @@ __pycache__/
 
 # User Uploads (so you don't overwrite live avatars when pushing code)
 static/uploads/
+
+*.db
+.DS_Store

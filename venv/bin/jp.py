@@ -1,4 +1,4 @@
-#!/media/foolio/beans/spudrmn/venv/bin/python3
+#!/home/admin/coding_folder/streetcode_frontend/venv/bin/python3
 
 import sys
 import json
