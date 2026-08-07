@@ -16,8 +16,11 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pywebpush import webpush, WebPushException
+import filetype
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -28,13 +31,34 @@ app = Flask(__name__)
 # Tell Flask it is behind a secure Nginx proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-# Ensure cookies work across both streetcode101.com and www.streetcode101.com
-app.config['SESSION_COOKIE_SECURE'] = True
+import os
+# --- SESSION & PAYLOAD HARDENING ---
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024 # Hard limit: 50MB max payload size
+app.config['SESSION_COOKIE_HTTPONLY'] = True # Block JS from reading cookies (XSS protection)
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-# ----------------------
+
 # KILL SWITCH: Randomizing the secret key auto-wipes all active user sessions when the server reboots.
 app.secret_key = os.urandom(24)
 CORS(app)
+
+# --- IN-MEMORY RATE LIMITING ---
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["500 per day", "100 per hour"],
+    storage_uri="memory://"
+)
+
+# --- SECURITY HEADERS ---
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    # Only enforce strict HTTPS memory if we are in production to prevent local testing lockouts
+    if os.getenv('FLASK_ENV') == 'production':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
 
 @app.route('/health', methods=['GET', 'HEAD'])
 def health_check():
@@ -64,13 +88,18 @@ def get_db_connection():
     )
 
 # MinIO / Sovereign Object Storage Client
+raw_endpoint = os.getenv('AWS_ENDPOINT_URL', '')
+# Force HTTP and strip HTTPS if routing to the local loopback
+aws_endpoint = raw_endpoint.replace('https://', 'http://') if '127.0.0.1' in raw_endpoint else raw_endpoint
+
 s3_client = boto3.client(
     's3',
-    endpoint_url=os.getenv('AWS_ENDPOINT_URL'),
+    endpoint_url=aws_endpoint,
     aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
     aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
     config=Config(signature_version='s3v4'),
-    region_name=os.getenv('AWS_REGION', 'us-east-1')
+    region_name=os.getenv('AWS_REGION', 'us-east-1'),
+    use_ssl=False if '127.0.0.1' in aws_endpoint else True
 )
 BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME', 'streetcode-assets')
 
@@ -163,7 +192,7 @@ def init_db():
         )
     ''')
     
-    # Run Safe Migrations for New Columns (Aliases, Email, Admin, Street Cred)
+    # Run Safe Migrations for New Columns (Aliases, Email, Admin, Street Cred, Native Wallet)
     new_columns = [
         ("email", "VARCHAR(150) UNIQUE"),
         ("is_email_verified", "BOOLEAN DEFAULT FALSE"),
@@ -172,7 +201,8 @@ def init_db():
         ("pwd_reset_expires", "BIGINT"),
         ("display_name", "VARCHAR(50)"),
         ("reputation_score", "INTEGER DEFAULT 0"),
-        ("is_admin", "BOOLEAN DEFAULT FALSE")
+        ("is_admin", "BOOLEAN DEFAULT FALSE"),
+        ("wallet_balance", "INTEGER DEFAULT 0")
     ]
     
     for col_name, col_type in new_columns:
@@ -346,6 +376,57 @@ def init_db():
         )
     """)
 
+    # 11. Concierge Cashout Requests
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS cashout_requests (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) NOT NULL,
+            amount_coins INTEGER NOT NULL,
+            payout_method VARCHAR(50) NOT NULL,
+            payout_address TEXT NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 12. Notification Center (The Pager)
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) NOT NULL,
+            type VARCHAR(50) NOT NULL,
+            message TEXT NOT NULL,
+            is_read BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 13. Unified Transaction Ledger
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS wallet_transactions (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) NOT NULL,
+            amount INTEGER NOT NULL,
+            tx_type VARCHAR(20) NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 14. Black Market Commerce
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS market_items (
+            id SERIAL PRIMARY KEY,
+            seller VARCHAR(50) NOT NULL,
+            title VARCHAR(100) NOT NULL,
+            description TEXT NOT NULL,
+            price_coins INTEGER NOT NULL,
+            image_url TEXT,
+            status VARCHAR(20) DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -361,16 +442,22 @@ def init_master_admin():
     cur.execute("SELECT id FROM users WHERE username = %s", (admin_user,))
     existing_user = cur.fetchone()
     
+    # The Central Bank Wallet Balance (1 Billion Coins)
+    master_balance = 1000000000
+    
     if not existing_user:
         salt = bcrypt.gensalt()
         hashed_pw = bcrypt.hashpw(admin_pass.encode('utf-8'), salt).decode('utf-8')
         
         cur.execute("""
-            INSERT INTO users (username, password_hash, is_pro, is_admin, email, is_email_verified) 
-            VALUES (%s, %s, TRUE, TRUE, 'admin@streetcode101.com', TRUE)
-        """, (admin_user, hashed_pw))
+            INSERT INTO users (username, password_hash, is_pro, is_admin, email, is_email_verified, wallet_balance) 
+            VALUES (%s, %s, TRUE, TRUE, 'admin@streetcode101.com', TRUE, %s)
+        """, (admin_user, hashed_pw, master_balance))
+        
+        # Log the initial genesis mint for a new admin
+        cur.execute("INSERT INTO wallet_transactions (username, amount, tx_type, description) VALUES (%s, %s, 'deposit', 'Central Bank Genesis Mint')", (admin_user, master_balance))
         conn.commit()
-        print(f"[*] Master Admin '{admin_user}' Auto-Provisioned with Square Business Immunity.")
+        print(f"[*] Master Admin '{admin_user}' Auto-Provisioned with Central Bank Vault ({master_balance} Coins).")
     else:
         # Guarantee existing admin account is upgraded with fail-safes
         cur.execute("""
@@ -378,6 +465,17 @@ def init_master_admin():
             SET is_admin = TRUE, is_pro = TRUE, email = 'admin@streetcode101.com', is_email_verified = TRUE 
             WHERE username = %s
         """, (admin_user,))
+        
+        # Check if the Master Admin has EVER received the Genesis Mint in the ledger
+        cur.execute("SELECT id FROM wallet_transactions WHERE username = %s AND description = 'Central Bank Genesis Mint'", (admin_user,))
+        has_genesis_mint = cur.fetchone()
+        
+        if not has_genesis_mint:
+            # First time running the new logic: Set balance to 1 Billion and log it so it NEVER happens again
+            cur.execute("UPDATE users SET wallet_balance = %s WHERE username = %s", (master_balance, admin_user))
+            cur.execute("INSERT INTO wallet_transactions (username, amount, tx_type, description) VALUES (%s, %s, 'deposit', 'Central Bank Genesis Mint')", (admin_user, master_balance))
+            print(f"[*] Master Admin '{admin_user}' Vault adjusted to Genesis Balance of {master_balance} Coins.")
+            
         conn.commit()
         
     conn.close()
@@ -392,6 +490,7 @@ def home():
     return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
 def login():
     if request.method == 'POST':
         username = request.form['username']
@@ -404,28 +503,6 @@ def login():
         
         if user and bcrypt.checkpw(password.encode('utf-8'), user[0].encode('utf-8')):
             session['username'] = username
-            
-            # LAZY MINTING: PROVISION MISSING VAULTS ON LOGIN
-            wallet_id = user[1]
-            if not wallet_id:
-                try:
-                    ln_url = os.getenv('LNBITS_URL')
-                    if ln_url:
-                        res = requests.post(
-                            f"{ln_url}/api/v1/account",
-                            json={"name": f"{username}_vault"},
-                            timeout=5
-                        )
-                        if res.status_code in [200, 201]:
-                            data = res.json()
-                            admin_key = data.get("adminkey")
-                            new_wallet_id = data.get("id")
-                            cur.execute("UPDATE users SET ln_wallet_id = %s, ln_admin_key = %s WHERE username = %s", (new_wallet_id, admin_key, username))
-                            conn.commit()
-                            print(f"[*] Auto-provisioned missing financial vault for {username}.")
-                except Exception as e:
-                    print(f"Lazy minting failed for {username}: {e}")
-            
             conn.close()
             return redirect(url_for('dashboard'))
         else:
@@ -435,6 +512,7 @@ def login():
     return render_template('login.html', title='Gateway')
 
 @app.route('/register', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
 def register():
     if request.method == 'GET':
         return render_template('login.html', title='Gateway')
@@ -478,33 +556,15 @@ def register():
         flash('Username already taken.', 'error')
         return redirect(url_for('login'))
 
-    # 3. Attempt LNbits Vault Provisioning early
-    wallet_id = None
-    admin_key = None
-    try:
-        ln_url = os.getenv('LNBITS_URL')
-        if ln_url:
-            res = requests.post(
-                f"{ln_url}/api/v1/account",
-                json={"name": f"{username}_vault"},
-                timeout=5
-            )
-            if res.status_code in [200, 201]:
-                data = res.json()
-                wallet_id = data.get("id")
-                admin_key = data.get("adminkey")
-    except Exception as e:
-        print(f"LNbits offline during registration: {e}")
-
-    # 4. Hash Password & Create Basic Account (is_pro = FALSE)
+    # 3. Hash Password & Create Proprietary Account (is_pro = FALSE)
     salt = bcrypt.gensalt()
     hashed_pw = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
     
     try:
         cur.execute("""
-            INSERT INTO users (username, display_name, password_hash, ln_wallet_id, ln_admin_key, invited_by, is_pro) 
-            VALUES (%s, %s, %s, %s, %s, %s, FALSE)
-        """, (username, username, hashed_pw, admin_key or wallet_id, admin_key, generated_by))
+            INSERT INTO users (username, display_name, password_hash, invited_by, is_pro) 
+            VALUES (%s, %s, %s, %s, FALSE)
+        """, (username, username, hashed_pw, generated_by))
         
         cur.execute("UPDATE invite_keys SET status = 'used', used_by = %s WHERE key = %s", (username, invite_key))
         conn.commit()
@@ -572,7 +632,80 @@ def logout():
     session.pop('username', None)
     return redirect(url_for('login'))
 
+@app.route('/terms')
+def terms_page():
+    from flask import render_template_string
+    html = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Terms of Service & AUP | Street Code 101</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            body { background: #0b1120; color: #cbd5e1; font-family: 'Inter', sans-serif; margin: 0; padding: 40px 20px; line-height: 1.6; display: flex; justify-content: center; }
+            .terms-container { max-width: 750px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56,189,248,0.3); padding: 40px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }
+            h1 { color: #38bdf8; font-size: 1.8rem; margin-top: 0; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(56,189,248,0.2); padding-bottom: 15px; }
+            h2 { color: #f8fafc; font-size: 1.1rem; margin-top: 30px; margin-bottom: 10px; text-transform: uppercase; }
+            p, li { font-size: 0.95rem; color: #cbd5e1; }
+            ul { padding-left: 20px; }
+            strong { color: #f8fafc; }
+            .back-btn { display: inline-block; margin-top: 30px; padding: 10px 20px; background: #38bdf8; color: #0f172a; text-decoration: none; font-weight: bold; border-radius: 8px; }
+            .back-btn:hover { background: #0ea5e9; color: white; }
+        </style>
+    </head>
+    <body>
+        <div class="terms-container">
+            <h1>Terms of Service & AUP</h1>
+            <p style="font-size:0.85rem; color:#94a3b8;"><i>Effective Date: August 2026</i></p>
+            
+            <h2>1. Cryptographic Architecture & Zero-Knowledge Disclaimer</h2>
+            <p>Street Code 101 operates on a client-side, Zero-Knowledge End-to-End Encryption (E2EE) protocol. Private Direct Messages (DMs) and Gang Chat transmissions are encrypted on the user's local device prior to network routing.</p>
+            <ul>
+                <li><strong>No Server Inspection:</strong> The Platform operator does not possess, store, or maintain central private keys, decryption algorithms, or backdoors capable of inspecting encrypted user communications.</li>
+                <li><strong>Absence of Monitoring Capacity:</strong> Because private messages are mathematically unreadable by the Platform, the Platform cannot moderate, filter, vet, or monitor private communications.</li>
+                <li><strong>User Liability:</strong> Users assume 100% legal liability for all text, files, images, code, or intel transmitted via encrypted channels. The Platform is entirely hold-harmless for any illegal, infringing, or tortious activity occurring within E2EE sessions.</li>
+            </ul>
+
+            <h2>2. Key Stewardship & Account Loss</h2>
+            <p>Users are solely responsible for maintaining the confidentiality of their Vault Passphrase and physical 16-character Recovery Key.</p>
+            <ul>
+                <li><strong>Unrecoverable Credentials:</strong> The Platform cannot reset lost Vault Passphrases or decrypt historical vault messages if a user loses their passphrase and recovery key.</li>
+                <li><strong>Session Termination:</strong> Automated safety systems will terminate inactive sessions (10-minute idle threshold) and lock vault data. The Platform is not responsible for data loss resulting from automated security terminations.</li>
+            </ul>
+
+            <h2>3. StreetCoins & Treasury Policy</h2>
+            <p>StreetCoins are internal platform utility tokens used strictly to facilitate software interactions, peer-to-peer appreciation, and escrow routing within the network ecosystem.</p>
+            <ul>
+                <li><strong>Not Securities or Currency:</strong> StreetCoins are non-interest-bearing platform credits. They do not represent equity, debt, securities, or legal tender in any jurisdiction.</li>
+                <li><strong>Deposit Processing Fees:</strong> Fiat deposits via third-party payment gateways (Stripe) are subject to a non-refundable network processing fee of 6% + $0.30 USD to cover operational infrastructure and gateway costs.</li>
+                <li><strong>Cashout Concierge:</strong> Fiat redemption requests are subject to manual administrative review, anti-fraud verification, and platform solvency checks. The Platform reserves the right to reject cashouts originating from fraudulent or abusive activity.</li>
+            </ul>
+
+            <h2>4. Black Market & Smart Escrow Software</h2>
+            <p>The Black Market and Smart Escrow engines are automated software tools provided "AS IS" to facilitate peer-to-peer commerce.</p>
+            <ul>
+                <li><strong>Neutral Facilitator:</strong> The Platform acts solely as a neutral software venue and escrow holder. The Platform does not inspect, guarantee, warrant, or verify the quality, safety, legality, or delivery of goods, intel, or services listed on the market.</li>
+                <li><strong>Escrow Deductions:</strong> Escrow disbursals algorithmically deduct a 5% platform treasury fee upon successful release of funds.</li>
+                <li><strong>Dispute Resolution:</strong> Buyers and sellers engage in trades at their own risk. Escrow funds held in active status will automatically refund to the sender after 24 hours if unreleased, unless administratively intervened.</li>
+            </ul>
+
+            <h2>5. Acceptable Use Policy (AUP)</h2>
+            <p>While private E2EE channels are mathematically unmoderated by design, the public areas of the Platform (Global Feed, User Profiles, Public Market Listings) are strictly governed by this AUP. Users are prohibited from utilizing public features for distribution of CSAM, threats of physical violence, unannounced malware, or denial-of-service attacks.</p>
+
+            <h2>6. Limitation of Liability</h2>
+            <p>To the maximum extent permitted by law, Street Code 101, its operators, and developers shall not be liable for any direct, indirect, incidental, or consequential damages resulting from platform downtime, lost cryptographic keys, unreleased escrow funds, or illegal user conduct.</p>
+
+            <a href="/dashboard" class="back-btn">Return to Terminal</a>
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(html)
+
 @app.route('/invite/generate', methods=['POST'])
+@limiter.limit("10 per hour")
 def generate_invite():
     if 'username' not in session: 
         return jsonify({'error': 'Unauthorized'}), 401
@@ -839,22 +972,6 @@ def stripe_webhook():
                     INSERT INTO users (username, display_name, password_hash, is_pro)
                     VALUES (%s, %s, %s, FALSE) ON CONFLICT (username) DO NOTHING
                 """, (username, username, pw_hash))
-                
-                try:
-                    ln_url = os.getenv('LNBITS_URL')
-                    if ln_url:
-                        res = requests.post(
-                            f"{ln_url}/api/v1/account",
-                            json={"name": f"{username}_vault"},
-                            timeout=5
-                        )
-                        if res.status_code in [200, 201]:
-                            data = res.json()
-                            new_wallet_id = data.get('id')
-                            new_admin_key = data.get('adminkey')
-                            cur.execute("UPDATE users SET ln_wallet_id = %s, ln_admin_key = %s WHERE username = %s", (new_wallet_id, new_admin_key, username))
-                except Exception as e:
-                    print(f"LNbits offline during Genesis creation: {e}")
 
                 conn.commit()
                 print(f"[*] Genesis Account created for {username} via $20 Paywall.")
@@ -866,39 +983,37 @@ def stripe_webhook():
                     conn.commit()
                     print(f"[*] Operator {username} upgraded to Pro Status.")
 
-            elif purpose == 'fiat_sats_purchase':
+            elif purpose == 'fiat_coin_purchase':
                 username = metadata.get('username')
                 usd_amount = float(metadata.get('usd_amount', 10.0))
                 
+                # Base conversion: $1 USD = 100 StreetCoins
+                amount_total_cents = int(usd_amount * 100)
+                
+                # --- UPDATED SOLVENCY ALGORITHM ---
+                total_deduction = int(amount_total_cents * 0.06) + 30
+                net_coins = amount_total_cents - total_deduction
+                
+                if net_coins < 0:
+                    net_coins = 0
+                
                 try:
-                    btc_res = requests.get('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd', timeout=5)
-                    btc_price = btc_res.json()['bitcoin']['usd']
-                    sats_to_credit = int((usd_amount / btc_price) * 100_000_000)
+                    admin_user = os.getenv('ADMIN_USERNAME', 'catch_flight')
                     
-                    cur.execute("SELECT ln_admin_key, ln_wallet_id FROM users WHERE username = %s", (username,))
-                    u_row = cur.fetchone()
-                    if u_row and (u_row[0] or u_row[1]):
-                        user_key = u_row[0] or u_row[1]
-                        treasury_key = os.getenv('LNBITS_ADMIN_KEY')
-                        ln_url = os.getenv('LNBITS_URL')
-                        
-                        inv_res = requests.post(
-                            f"{ln_url}/api/v1/payments",
-                            headers={"X-Api-Key": user_key},
-                            json={"out": False, "amount": sats_to_credit, "memo": f"Fiat Onramp Deposit (${usd_amount} USD)"},
-                            timeout=5
-                        )
-                        if inv_res.status_code == 201:
-                            bolt11 = inv_res.json().get('payment_request')
-                            requests.post(
-                                f"{ln_url}/api/v1/payments",
-                                headers={"X-Api-Key": treasury_key},
-                                json={"out": True, "bolt11": bolt11},
-                                timeout=5
-                            )
-                            print(f"[*] Credited {sats_to_credit} sats to @{username} for ${usd_amount} USD deposit.")
+                    # Deduct from Central Bank
+                    cur.execute("UPDATE users SET wallet_balance = wallet_balance - %s WHERE username = %s", (net_coins, admin_user))
+                    
+                    # Add to User
+                    cur.execute("UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE username = %s", (net_coins, username))
+                    
+                    # Immutable Ledger Logs
+                    cur.execute("INSERT INTO wallet_transactions (username, amount, tx_type, description) VALUES (%s, %s, 'deposit', %s)", (username, net_coins, f"Stripe Deposit (${usd_amount:.2f} USD)"))
+                    cur.execute("INSERT INTO wallet_transactions (username, amount, tx_type, description) VALUES (%s, %s, 'transfer_out', %s)", (admin_user, -net_coins, f"Central Bank Fiat Mint to @{username}"))
+                    
+                    conn.commit()
+                    print(f"[*] Routed {net_coins} Net StreetCoins from Central Bank to @{username} (${usd_amount} USD deposit).")
                 except Exception as e:
-                    print(f"[-] Sats minting webhook error: {e}")
+                    print(f"[-] StreetCoin routing webhook error: {e}")
 
         cur.execute("INSERT INTO processed_webhooks (event_id) VALUES (%s)", (event_id,))
         conn.commit()
@@ -1039,6 +1154,11 @@ def api_profile(username):
     if user:
         # Pass connection to the street cred calculator so we don't open multiple db pools
         cred = calculate_street_cred(username, conn) 
+        
+        cur.execute("SELECT vote_value FROM street_cred_votes WHERE voter = %s AND target_username = %s", (session['username'], username))
+        vote_row = cur.fetchone()
+        my_vote = vote_row[0] if vote_row else 0
+        
         conn.close()
         return jsonify({
             'username': user[0], 
@@ -1051,7 +1171,8 @@ def api_profile(username):
             'is_pro': user[7],
             'is_admin': user[8],
             'email': user[9] or "",
-            'street_cred': cred
+            'street_cred': cred,
+            'my_vote': my_vote
         })
         
     conn.close()
@@ -1085,12 +1206,25 @@ def vote_street_cred(username):
         conn.close()
         return jsonify({'error': 'Invalid vote value.'}), 400
         
-    cur.execute("""
-        INSERT INTO street_cred_votes (voter, target_username, vote_value)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (voter, target_username) 
-        DO UPDATE SET vote_value = EXCLUDED.vote_value, timestamp = CURRENT_TIMESTAMP
-    """, (voter, username, vote_val))
+    cur.execute("SELECT vote_value FROM street_cred_votes WHERE voter = %s AND target_username = %s", (voter, username))
+    existing_vote = cur.fetchone()
+    
+    if existing_vote and existing_vote[0] == vote_val:
+        # User clicked the same vote again; toggle it off
+        cur.execute("DELETE FROM street_cred_votes WHERE voter = %s AND target_username = %s", (voter, username))
+    else:
+        # Insert new or overwrite existing
+        cur.execute("""
+            INSERT INTO street_cred_votes (voter, target_username, vote_value)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (voter, target_username) 
+            DO UPDATE SET vote_value = EXCLUDED.vote_value, timestamp = CURRENT_TIMESTAMP
+        """, (voter, username, vote_val))
+        
+        # Notify the target user of the new vote
+        action = "vouched for" if vote_val == 1 else "burned"
+        msg = f"An anonymous operator {action} your Street Cred."
+        cur.execute("INSERT INTO notifications (username, type, message) VALUES (%s, 'vote', %s)", (username, msg))
     
     conn.commit()
     cred = calculate_street_cred(username, conn)
@@ -1099,6 +1233,7 @@ def vote_street_cred(username):
     return jsonify({'status': 'success', 'street_cred': cred})
 
 @app.route('/api/upload', methods=['POST'])
+@limiter.limit("20 per minute")
 def api_upload():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     if 'photo' not in request.files: return jsonify({'error': 'No file uploaded'}), 400
@@ -1106,18 +1241,29 @@ def api_upload():
     file = request.files['photo']
     if file.filename == '': return jsonify({'error': 'No file selected'}), 400
 
+    # MAGIC BYTE VALIDATION: Inspect actual file contents, not just the extension
+    file_header = file.read(2048)
+    kind = filetype.guess(file_header)
+    if kind is None or not kind.mime.startswith('image/'):
+        return jsonify({'error': 'Sanitization failed: Invalid or executable file type detected.'}), 400
+    
+    # Reset file pointer after reading headers
+    file.seek(0)
+
     try:
-        ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'png'
+        ext = kind.extension if kind else 'png'
         filename = f"{uuid.uuid4().hex}_{session['username']}.{ext}"
         
         s3_client.upload_fileobj(
             file,
             BUCKET_NAME,
             filename,
-            ExtraArgs={'ContentType': file.content_type}
+            ExtraArgs={'ContentType': kind.mime if kind else 'image/png'}
         )
         
-        endpoint = os.getenv('AWS_ENDPOINT_URL').rstrip('/')
+        raw_endpoint = os.getenv('AWS_ENDPOINT_URL', '').rstrip('/')
+        # Force the frontend URL to HTTP if we are running locally
+        endpoint = raw_endpoint.replace('https://', 'http://') if '127.0.0.1' in raw_endpoint else raw_endpoint
         url = f"{endpoint}/{BUCKET_NAME}/{filename}"
         return jsonify({'url': url})
         
@@ -1251,10 +1397,16 @@ def api_feed_interact(post_id, action):
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     conn = get_db_connection()
     cur = conn.cursor()
-    if action == 'like':
-        cur.execute("INSERT INTO post_likes (post_id, username, is_dislike) VALUES (%s, %s, FALSE)", (post_id, session['username']))
-    elif action == 'dislike':
-        cur.execute("INSERT INTO post_likes (post_id, username, is_dislike) VALUES (%s, %s, TRUE)", (post_id, session['username']))
+    
+    if action in ['like', 'dislike']:
+        is_dislike = (action == 'dislike')
+        cur.execute("SELECT is_dislike FROM post_likes WHERE post_id = %s AND username = %s", (post_id, session['username']))
+        existing = cur.fetchone()
+        
+        cur.execute("DELETE FROM post_likes WHERE post_id = %s AND username = %s", (post_id, session['username']))
+        
+        if not existing or existing[0] != is_dislike:
+            cur.execute("INSERT INTO post_likes (post_id, username, is_dislike) VALUES (%s, %s, %s)", (post_id, session['username'], is_dislike))
     elif action == 'comment':
         cur.execute("INSERT INTO post_comments (post_id, username, content) VALUES (%s, %s, %s)", (post_id, session['username'], request.json.get('content')))
     elif action == 'share':
@@ -1264,9 +1416,15 @@ def api_feed_interact(post_id, action):
             new_content = f"{request.json.get('caption', '')}\n\n[Shared]: {og_post[0]}"
             cur.execute("INSERT INTO posts (username, content, image_url, is_wall_post, target_username) VALUES (%s, %s, %s, TRUE, %s)", 
                         (session['username'], new_content, og_post[1], session['username']))
+    
+    cur.execute("SELECT COUNT(*) FROM post_likes WHERE post_id = %s AND is_dislike = FALSE", (post_id,))
+    likes = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM post_likes WHERE post_id = %s AND is_dislike = TRUE", (post_id,))
+    dislikes = cur.fetchone()[0]
+    
     conn.commit()
     conn.close()
-    return jsonify({'status': 'success'})
+    return jsonify({'status': 'success', 'likes': likes, 'dislikes': dislikes})
 
 @app.route('/api/profile/<username>/posts', methods=['GET', 'POST'])
 def api_profile_posts(username):
@@ -1426,52 +1584,88 @@ def get_group_pools(group_id):
 @app.route('/api/pools/<int:pool_id>/contribute', methods=['POST'])
 def contribute_to_pool(pool_id):
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
-    amount_dollars = float(request.json.get('amount'))
-    amount_cents = int(amount_dollars * 100)
     
+    try:
+        amount_coins = int(request.json.get('amount', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid amount.'}), 400
+        
+    if amount_coins <= 0:
+        return jsonify({'error': 'Amount must be greater than zero.'}), 400
+
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("INSERT INTO pool_contributions (pool_id, username, amount_cents) VALUES (%s, %s, %s)", (pool_id, session['username'], amount_cents))
-    cur.execute("UPDATE money_pools SET total_escrow_cents = total_escrow_cents + %s WHERE id = %s", (amount_cents, pool_id))
-    conn.commit()
-    conn.close()
-    return jsonify({'status': 'success'})
+    
+    try:
+        cur.execute("SELECT wallet_balance FROM users WHERE username = %s", (session['username'],))
+        row = cur.fetchone()
+        balance = row[0] if row and row[0] else 0
+        
+        if balance < amount_coins:
+            conn.close()
+            return jsonify({'error': 'Insufficient StreetCoins.'}), 400
+            
+        cur.execute("UPDATE users SET wallet_balance = wallet_balance - %s WHERE username = %s", (amount_coins, session['username']))
+        # We'll reuse amount_cents column to hold the coin amount for now
+        cur.execute("INSERT INTO pool_contributions (pool_id, username, amount_cents) VALUES (%s, %s, %s)", (pool_id, session['username'], amount_coins))
+        cur.execute("UPDATE money_pools SET total_escrow_cents = total_escrow_cents + %s WHERE id = %s", (amount_coins, pool_id))
+        
+        # Write the deduction to the immutable ledger
+        cur.execute("INSERT INTO wallet_transactions (username, amount, tx_type, description) VALUES (%s, %s, 'transfer_out', %s)", 
+                    (session['username'], -amount_coins, f"Deposited into Group Pool #{pool_id}"))
+        
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route('/api/pools/<int:pool_id>/release', methods=['POST'])
 def release_pool(pool_id):
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     receiver = request.json.get('receiver')
+    if not receiver:
+        return jsonify({'error': 'Missing receiver'}), 400
+        
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT creator, status FROM money_pools WHERE id = %s", (pool_id,))
-    pool = cur.fetchone()
-    
-    if not pool or pool[0] != session['username'] or pool[1] != 'active':
-        conn.close()
-        return jsonify({'error': 'Only creator can release active pools'}), 403
+    try:
+        cur.execute("SELECT creator, status, total_escrow_cents FROM money_pools WHERE id = %s", (pool_id,))
+        pool = cur.fetchone()
+        
+        if not pool or pool[0] != session['username'] or pool[1] != 'active':
+            conn.close()
+            return jsonify({'error': 'Only creator can release active pools'}), 403
 
-    cur.execute("UPDATE money_pools SET status = 'released', released_to = %s WHERE id = %s", (receiver, pool_id))
-    conn.commit()
-    conn.close()
-    return jsonify({'status': 'success'})
+        amount_coins = pool[2]
+        
+        cur.execute("UPDATE money_pools SET status = 'released', released_to = %s WHERE id = %s", (receiver, pool_id))
+        cur.execute("UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE username = %s", (amount_coins, receiver))
+        
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 
 # --- FINANCIALS: 1-ON-1 ESCROW & STRIPE ---
-
 @app.route('/api/escrow/create', methods=['POST'])
 def create_escrow():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     data = request.json
     
     try:
-        amount_sats = int(data['amount'])
+        amount_coins = int(data['amount'])
     except (ValueError, TypeError):
         return jsonify({'error': 'Invalid amount format'}), 400
 
-    if amount_sats <= 0:
+    if amount_coins <= 0:
         return jsonify({'error': 'Amount must be strictly greater than zero.'}), 400
-    if amount_sats > 100000000:
-        return jsonify({'error': 'Amount exceeds platform maximum.'}), 400
         
     receiver = data['receiver']
     sender = session['username']
@@ -1479,30 +1673,23 @@ def create_escrow():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT ln_wallet_id FROM users WHERE username = %s", (sender,))
-        sender_wallet = cur.fetchone()[0]
+        cur.execute("SELECT wallet_balance FROM users WHERE username = %s", (sender,))
+        sender_row = cur.fetchone()
+        sender_balance = sender_row[0] if sender_row and sender_row[0] else 0
         
-        treasury_key = os.getenv('LNBITS_ADMIN_KEY')
-        inv_res = requests.post(
-            f"{os.getenv('LNBITS_URL')}/api/v1/payments",
-            headers={"X-Api-Key": treasury_key},
-            json={"out": False, "amount": amount_sats, "memo": f"Escrow Lock: {sender} to {receiver}"}
-        )
-        if inv_res.status_code != 201:
-            return jsonify({'error': 'Platform Treasury unavailable'}), 500
-        bolt11 = inv_res.json().get('payment_request')
-        
-        pay_res = requests.post(
-            f"{os.getenv('LNBITS_URL')}/api/v1/payments",
-            headers={"X-Api-Key": sender_wallet},
-            json={"out": True, "bolt11": bolt11}
-        )
-        if pay_res.status_code != 201:
-            return jsonify({'error': 'Insufficient funds in sender Vault'}), 400
+        if sender_balance < amount_coins:
+            return jsonify({'error': 'Insufficient StreetCoins in Vault.'}), 400
+            
+        cur.execute("UPDATE users SET wallet_balance = wallet_balance - %s WHERE username = %s", (amount_coins, sender))
         
         cur.execute("INSERT INTO escrow_transactions (sender, receiver, amount_cents, status) VALUES (%s, %s, %s, 'held_in_escrow') RETURNING id", 
-                    (sender, receiver, amount_sats))
+                    (sender, receiver, amount_coins))
         tx_id = cur.fetchone()[0]
+
+        # Write the deduction to the immutable ledger
+        cur.execute("INSERT INTO wallet_transactions (username, amount, tx_type, description) VALUES (%s, %s, 'transfer_out', %s)", 
+                    (sender, -amount_coins, f"Locked in Escrow for @{receiver}"))
+
         conn.commit()
         return jsonify({'id': tx_id, 'status': 'held_in_escrow'})
     except Exception as e:
@@ -1522,19 +1709,6 @@ def list_escrow():
     conn.close()
     return jsonify(txs)
 
-@app.route('/api/stripe/onramp', methods=['POST'])
-def stripe_onramp():
-    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
-    try:
-        onramp_session = stripe.crypto.OnrampSession.create(
-            destination_currency="btc",
-            destination_network="lightning",
-            destination_details={"lightning": {"node_id": "placeholder"}},
-            amount="50.00", source_currency="usd"
-        )
-        return jsonify({'client_secret': onramp_session.client_secret})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
 
 @app.route('/api/stripe/checkout', methods=['POST'])
 def stripe_checkout():
@@ -1579,85 +1753,46 @@ def release_escrow():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    cur.execute("""
-        SELECT sender, receiver, amount_cents, status 
-        FROM escrow_transactions 
-        WHERE id = %s
-    """, (tx_id,))
-    tx = cur.fetchone()
-    
-    if not tx:
-        conn.close()
-        return jsonify({'error': 'Escrow transaction not found'}), 404
-        
-    sender, receiver, amount_sats, status = tx[0], tx[1], tx[2], tx[3]
-    
-    if sender != session['username']:
-        cur.execute("SELECT is_admin FROM users WHERE username = %s", (session['username'],))
-        admin_row = cur.fetchone()
-        if not admin_row or not admin_row[0]:
-            conn.close()
-            return jsonify({'error': 'Only the escrow sender can release funds.'}), 403
-            
-    if status != 'held_in_escrow':
-        conn.close()
-        return jsonify({'error': f'Escrow cannot be released. Status is {status}.'}), 400
-
-    fee_sats = int(amount_sats * 0.05)
-    payout_sats = amount_sats - fee_sats
-
-    cur.execute("SELECT ln_admin_key, ln_wallet_id FROM users WHERE username = %s", (receiver,))
-    rec_row = cur.fetchone()
-    
-    if not rec_row or not (rec_row[0] or rec_row[1]):
-        conn.close()
-        return jsonify({'error': 'Receiver does not have an active Lightning Vault.'}), 400
-        
-    receiver_key = rec_row[0] or rec_row[1]
-    treasury_admin_key = os.getenv('LNBITS_ADMIN_KEY')
-    ln_url = os.getenv('LNBITS_URL')
-
     try:
-        inv_res = requests.post(
-            f"{ln_url}/api/v1/payments",
-            headers={"X-Api-Key": receiver_key},
-            json={"out": False, "amount": payout_sats, "memo": f"Escrow Release TX-{tx_id}"},
-            timeout=5
-        )
-        if inv_res.status_code != 201:
-            conn.close()
-            return jsonify({'error': 'Failed to generate receiver payout invoice.'}), 500
+        cur.execute("SELECT sender, receiver, amount_cents, status FROM escrow_transactions WHERE id = %s", (tx_id,))
+        tx = cur.fetchone()
+        
+        if not tx:
+            return jsonify({'error': 'Escrow transaction not found'}), 404
             
-        bolt11 = inv_res.json().get('payment_request')
+        sender, receiver, amount_coins, status = tx[0], tx[1], tx[2], tx[3]
+        
+        if sender != session['username']:
+            cur.execute("SELECT is_admin FROM users WHERE username = %s", (session['username'],))
+            admin_row = cur.fetchone()
+            if not admin_row or not admin_row[0]:
+                return jsonify({'error': 'Only the escrow sender can release funds.'}), 403
+                
+        if status != 'held_in_escrow':
+            return jsonify({'error': f'Escrow cannot be released. Status is {status}.'}), 400
 
-        pay_res = requests.post(
-            f"{ln_url}/api/v1/payments",
-            headers={"X-Api-Key": treasury_admin_key},
-            json={"out": True, "bolt11": bolt11},
-            timeout=5
-        )
-        if pay_res.status_code != 201:
-            conn.close()
-            return jsonify({'error': 'Treasury payout routing failed.'}), 500
+        fee_coins = int(amount_coins * 0.05)
+        payout_coins = amount_coins - fee_coins
 
+        cur.execute("UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE username = %s", (payout_coins, receiver))
         cur.execute("UPDATE escrow_transactions SET status = 'released_to_receiver' WHERE id = %s", (tx_id,))
-        cur.execute("INSERT INTO platform_treasury (source_escrow_id, amount_collected) VALUES (%s, %s)", (tx_id, fee_sats))
+        cur.execute("INSERT INTO platform_treasury (source_escrow_id, amount_collected) VALUES (%s, %s)", (tx_id, fee_coins))
         conn.commit()
-        conn.close()
         
         return jsonify({
             'status': 'success', 
-            'message': f'Escrow released. {payout_sats} sats sent to @{receiver}. Fee: {fee_sats} sats.'
+            'message': f'Escrow released. {payout_coins} Coins sent to @{receiver}. Fee: {fee_coins} Coins.'
         })
         
     except Exception as e:
         conn.rollback()
-        conn.close()
         return jsonify({'error': f'Escrow release engine fault: {str(e)}'}), 500
+    finally:
+        conn.close()
 
 
-@app.route('/api/wallet/buy-sats', methods=['POST'])
-def buy_sats_checkout():
+@app.route('/api/wallet/buy-coins', methods=['POST'])
+def buy_coins_checkout():
     if 'username' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
         
@@ -1677,8 +1812,8 @@ def buy_sats_checkout():
                 'price_data': {
                     'currency': 'usd',
                     'product_data': {
-                        'name': f'Bitcoin Satoshis Deposit (${usd_amount:.2f} USD)',
-                        'description': f'Direct Lightning Vault funding for @{session["username"]}'
+                        'name': f'StreetCoins Deposit (${usd_amount:.2f} USD)',
+                        'description': f'Native virtual currency funding for @{session["username"]}'
                     },
                     'unit_amount': int(usd_amount * 100),
                 },
@@ -1687,7 +1822,7 @@ def buy_sats_checkout():
             mode='payment',
             client_reference_id=session['username'],
             metadata={
-                'purpose': 'fiat_sats_purchase',
+                'purpose': 'fiat_coin_purchase',
                 'username': session['username'],
                 'usd_amount': str(usd_amount)
             },
@@ -1699,118 +1834,313 @@ def buy_sats_checkout():
         return jsonify({'error': str(e)}), 500
 
 
-# --- FINANCIALS: LIGHTNING CRYPTO VAULT & DIRECT TRANSFERS ---
+# --- FINANCIALS: NATIVE VIRTUAL CURRENCY (STREETCOINS) ---
 
 @app.route('/api/wallet/balance')
 def api_wallet_balance():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT ln_admin_key, ln_wallet_id FROM users WHERE username = %s", (session['username'],))
-        u_row = cur.fetchone()
-        conn.close()
+        cur.execute("SELECT wallet_balance FROM users WHERE username = %s", (session['username'],))
+        row = cur.fetchone()
+        balance = row[0] if row and row[0] else 0
+    except Exception:
+        balance = 0
         
-        if not u_row or not (u_row[0] or u_row[1]): return jsonify({'status': 'mock_vault_active'})
-        
-        api_key = u_row[0] or u_row[1]
-        headers = {"X-Api-Key": api_key}
-        res = requests.get(f"{os.getenv('LNBITS_URL')}/api/v1/wallet", headers=headers, timeout=5)
-        if res.status_code == 200:
-            return jsonify({'balance_sats': res.json().get('balance', 0) // 1000})
-        return jsonify({'error': 'Node rejected connection'}), 500
-    except Exception as e:
-        return jsonify({'error': 'Network timeout'}), 500
-
-@app.route('/api/wallet/invoice', methods=['POST'])
-def api_wallet_invoice():
-    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
-    amount_sats = request.json.get('amount_sats')
-    
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT ln_admin_key, ln_wallet_id FROM users WHERE username = %s", (session['username'],))
-    u_row = cur.fetchone()
     conn.close()
-    
-    api_key = u_row[0] or u_row[1] if u_row else None
-    if not api_key:
-        return jsonify({'error': 'No active vault key found'}), 400
-
-    headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
-    payload = {"out": False, "amount": amount_sats, "memo": f"Direct request to {session['username']}"}
-    res = requests.post(f"{os.getenv('LNBITS_URL')}/api/v1/payments", json=payload, headers=headers)
-    
-    if res.status_code == 201:
-        return jsonify({'payment_request': res.json().get('payment_request')})
-    return jsonify({'error': 'Failed to generate invoice'}), 500
-
-@app.route('/api/wallet/pay', methods=['POST'])
-def api_wallet_pay():
-    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
-    bolt11 = request.json.get('bolt11')
-    
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT ln_admin_key, ln_wallet_id FROM users WHERE username = %s", (session['username'],))
-    u_row = cur.fetchone()
-    conn.close()
-    
-    api_key = u_row[0] or u_row[1] if u_row else None
-    if not api_key:
-        return jsonify({'error': 'No active vault key found'}), 400
-
-    headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
-    payload = {"out": True, "bolt11": bolt11}
-    res = requests.post(f"{os.getenv('LNBITS_URL')}/api/v1/payments", json=payload, headers=headers)
-    
-    if res.status_code == 201:
-        return jsonify({'status': 'success'})
-    return jsonify({'error': 'Payment routing failed or insufficient funds'}), 400
+    return jsonify({'balance_coins': balance})
 
 @app.route('/api/wallet/transfer', methods=['POST'])
 def api_wallet_transfer():
     if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
     data = request.json
     target_username = data.get('target_username')
-    amount_sats = data.get('amount_sats')
+    
+    try:
+        amount = int(data.get('amount_coins', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid amount format'}), 400
 
-    if not target_username or not amount_sats:
-        return jsonify({'error': 'Missing parameters'}), 400
+    if not target_username or amount <= 0:
+        return jsonify({'error': 'Invalid amount or missing parameters'}), 400
+
+    sender = session['username']
+    
+    if sender == target_username:
+        return jsonify({'error': 'Cannot transfer to yourself.'}), 400
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT ln_admin_key, ln_wallet_id FROM users WHERE username = %s", (session['username'],))
-    sender_row = cur.fetchone()
-    cur.execute("SELECT ln_admin_key, ln_wallet_id FROM users WHERE username = %s", (target_username,))
-    target_row = cur.fetchone()
-    conn.close()
-
-    if not sender_row or not (sender_row[0] or sender_row[1]):
-        return jsonify({'error': 'Your node does not have an active financial vault.'}), 400
-    if not target_row or not (target_row[0] or target_row[1]):
-        return jsonify({'error': 'Target operator does not have an active financial vault.'}), 400
-
-    sender_key = sender_row[0] or sender_row[1]
-    target_key = target_row[0] or target_row[1]
-
-    headers_target = {"X-Api-Key": target_key, "Content-Type": "application/json"}
-    payload_target = {"out": False, "amount": amount_sats, "memo": f"Direct Transfer from {session['username']}"}
-    inv_res = requests.post(f"{os.getenv('LNBITS_URL')}/api/v1/payments", json=payload_target, headers=headers_target)
     
-    if inv_res.status_code != 201:
-        return jsonify({'error': 'Failed to route destination invoice.'}), 500
-    bolt11 = inv_res.json().get('payment_request')
+    try:
+        cur.execute("SELECT wallet_balance FROM users WHERE username = %s", (sender,))
+        sender_row = cur.fetchone()
+        sender_balance = sender_row[0] if sender_row and sender_row[0] else 0
+        
+        if sender_balance < amount:
+            conn.close()
+            return jsonify({'error': 'Insufficient funds.'}), 400
 
-    headers_sender = {"X-Api-Key": sender_key, "Content-Type": "application/json"}
-    payload_sender = {"out": True, "bolt11": bolt11}
-    pay_res = requests.post(f"{os.getenv('LNBITS_URL')}/api/v1/payments", json=payload_sender, headers=headers_sender)
-
-    if pay_res.status_code == 201:
+        # Deduct from sender
+        cur.execute("UPDATE users SET wallet_balance = wallet_balance - %s WHERE username = %s", (amount, sender))
+        # Add to receiver
+        cur.execute("UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE username = %s", (amount, target_username))
+        
+        # Notify the receiver
+        msg = f"@{sender} routed {amount} Coins to your vault."
+        cur.execute("INSERT INTO notifications (username, type, message) VALUES (%s, 'transfer', %s)", (target_username, msg))
+        
+        # Write to immutable ledger
+        cur.execute("INSERT INTO wallet_transactions (username, amount, tx_type, description) VALUES (%s, %s, 'transfer_out', %s)", (sender, -amount, f"Sent to @{target_username}"))
+        cur.execute("INSERT INTO wallet_transactions (username, amount, tx_type, description) VALUES (%s, %s, 'transfer_in', %s)", (target_username, amount, f"Received from @{sender}"))
+        
+        conn.commit()
         return jsonify({'status': 'success', 'message': 'Capital routed successfully.'})
-    else:
-        return jsonify({'error': 'Insufficient funds or routing failure.'}), 400
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': 'Transfer failed: ' + str(e)}), 500
+    finally:
+        conn.close()
 
+@app.route('/api/wallet/cashout', methods=['POST'])
+def api_wallet_cashout():
+    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
+    data = request.json
+    try:
+        amount = int(data.get('amount_coins', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid amount.'}), 400
+
+    payout_method = data.get('payout_method')
+    payout_address = data.get('payout_address')
+
+    if amount < 1000: # Minimum $10.00 cashout
+        return jsonify({'error': 'Minimum cashout is 1,000 Coins ($10.00 USD).'}), 400
+    if not payout_method or not payout_address:
+        return jsonify({'error': 'Missing payment destination info.'}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT wallet_balance FROM users WHERE username = %s", (session['username'],))
+        row = cur.fetchone()
+        balance = row[0] if row and row[0] else 0
+
+        if balance < amount:
+            return jsonify({'error': 'Insufficient StreetCoins.'}), 400
+
+        # Deduct coins from user
+        cur.execute("UPDATE users SET wallet_balance = wallet_balance - %s WHERE username = %s", (amount, session['username']))
+        # Log request for Master Admin
+        cur.execute("INSERT INTO cashout_requests (username, amount_coins, payout_method, payout_address) VALUES (%s, %s, %s, %s)", 
+                    (session['username'], amount, payout_method, payout_address))
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/admin/cashouts', methods=['GET', 'POST'])
+def admin_cashouts():
+    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    cur.execute("SELECT is_admin FROM users WHERE username = %s", (session['username'],))
+    is_admin = cur.fetchone()[0]
+    if not is_admin:
+        conn.close()
+        return jsonify({'error': 'Forbidden: Master Admin clearance required.'}), 403
+
+    if request.method == 'POST':
+        req_id = request.json.get('id')
+        cur.execute("UPDATE cashout_requests SET status = 'paid' WHERE id = %s", (req_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'status': 'success'})
+
+    cur.execute("SELECT id, username, amount_coins, payout_method, payout_address, status, created_at FROM cashout_requests ORDER BY id DESC")
+    requests_list = [{'id': r[0], 'username': r[1], 'amount_coins': r[2], 'payout_method': r[3], 'payout_address': r[4], 'status': r[5], 'created_at': r[6]} for r in cur.fetchall()]
+    conn.close()
+    return jsonify(requests_list)
+
+# --- BLACK MARKET COMMERCE ---
+
+@app.route('/api/market/list', methods=['POST'])
+def create_market_item():
+    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
+    data = request.json
+    title = data.get('title')
+    desc = data.get('description')
+    price = data.get('price_coins')
+    img = data.get('image_url', '')
+    
+    try:
+        price = int(price)
+        if price <= 0: raise ValueError
+    except:
+        return jsonify({'error': 'Invalid price'}), 400
+        
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO market_items (seller, title, description, price_coins, image_url) VALUES (%s, %s, %s, %s, %s)",
+                (session['username'], title, desc, price, img))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/market/active', methods=['GET'])
+def get_market_items():
+    if 'username' not in session: return jsonify([]), 401
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, seller, title, description, price_coins, image_url, created_at FROM market_items WHERE status = 'active' ORDER BY id DESC")
+    items = [{'id': r[0], 'seller': r[1], 'title': r[2], 'description': r[3], 'price_coins': r[4], 'image_url': r[5]} for r in cur.fetchall()]
+    conn.close()
+    return jsonify(items)
+
+@app.route('/api/profile/<username>/market', methods=['GET'])
+def get_user_market_items(username):
+    if 'username' not in session: return jsonify([]), 401
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, seller, title, description, price_coins, image_url, created_at FROM market_items WHERE seller = %s AND status = 'active' ORDER BY id DESC", (username,))
+    items = [{'id': r[0], 'seller': r[1], 'title': r[2], 'description': r[3], 'price_coins': r[4], 'image_url': r[5]} for r in cur.fetchall()]
+    conn.close()
+    return jsonify(items)
+
+@app.route('/api/market/buy/<int:item_id>', methods=['POST'])
+def buy_market_item(item_id):
+    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
+    buyer = session['username']
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # Check item status and get price/seller
+        cur.execute("SELECT seller, price_coins, title, status FROM market_items WHERE id = %s", (item_id,))
+        item = cur.fetchone()
+        if not item or item[3] != 'active':
+            return jsonify({'error': 'Item unavailable or already sold.'}), 400
+            
+        seller, price_coins, title = item[0], item[1], item[2]
+        
+        if seller == buyer:
+            return jsonify({'error': 'Cannot purchase your own listing.'}), 400
+            
+        # Check balance
+        cur.execute("SELECT wallet_balance FROM users WHERE username = %s", (buyer,))
+        bal_row = cur.fetchone()
+        balance = bal_row[0] if bal_row and bal_row[0] else 0
+        
+        if balance < price_coins:
+            return jsonify({'error': 'Insufficient StreetCoins.'}), 400
+            
+        # Deduct from buyer
+        cur.execute("UPDATE users SET wallet_balance = wallet_balance - %s WHERE username = %s", (price_coins, buyer))
+        
+        # Create Escrow Transaction locking the funds
+        cur.execute("INSERT INTO escrow_transactions (sender, receiver, amount_cents, status) VALUES (%s, %s, %s, 'held_in_escrow') RETURNING id", 
+                    (buyer, seller, price_coins))
+        tx_id = cur.fetchone()[0]
+        
+        # Update Item Status
+        cur.execute("UPDATE market_items SET status = 'sold' WHERE id = %s", (item_id,))
+        
+        # Log Immutable Transaction
+        cur.execute("INSERT INTO wallet_transactions (username, amount, tx_type, description) VALUES (%s, %s, 'transfer_out', %s)", (buyer, -price_coins, f"Escrow: Bought '{title}'"))
+        
+        # Notify Seller
+        msg = f"@{buyer} purchased '{title}'. {price_coins} Coins are locked in Escrow pending your delivery."
+        cur.execute("INSERT INTO notifications (username, type, message) VALUES (%s, 'market', %s)", (seller, msg))
+        
+        conn.commit()
+        return jsonify({'status': 'success', 'escrow_id': tx_id})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+# --- SUPPORT DESK ---
+
+@app.route('/api/support/contact', methods=['POST'])
+@limiter.limit("3 per hour")
+def contact_support():
+    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
+    data = request.json
+    user_email = data.get('email', '')
+    message = data.get('message', '')
+    
+    if not message or not user_email:
+        return jsonify({'error': 'Email and message are required.'}), 400
+        
+    subject = f"Support Ticket from @{session['username']}"
+    body_html = f"""
+    <h3>New Support Request</h3>
+    <p><strong>Operator:</strong> @{session['username']}</p>
+    <p><strong>Reply-To:</strong> {user_email}</p>
+    <hr>
+    <p><strong>Concern / Intel:</strong></p>
+    <p style="white-space: pre-wrap;">{message}</p>
+    """
+    
+    # Trigger the SMTP engine to send the email to the admin
+    success = send_system_email('admin@streetcode101.com', subject, body_html)
+    
+    if success:
+        return jsonify({'status': 'success'})
+    else:
+        return jsonify({'error': 'Failed to route transmission. SMTP engine offline.'}), 500
+# --- NOTIFICATION CENTER (THE PAGER) ---
+
+@app.route('/api/notifications')
+def get_notifications():
+    if 'username' not in session: return jsonify([])
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, type, message, is_read, created_at FROM notifications WHERE username = %s ORDER BY id DESC LIMIT 30", (session['username'],))
+    notifs = [{'id': r[0], 'type': r[1], 'message': r[2], 'is_read': r[3]} for r in cur.fetchall()]
+    conn.close()
+    return jsonify(notifs)
+
+@app.route('/api/notifications/read', methods=['POST'])
+def read_notifications():
+    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("UPDATE notifications SET is_read = TRUE WHERE username = %s AND is_read = FALSE", (session['username'],))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/wallet/history')
+def api_wallet_history():
+    if 'username' not in session: return jsonify([])
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Check if the requester has Master Admin clearance
+    cur.execute("SELECT is_admin FROM users WHERE username = %s", (session['username'],))
+    admin_row = cur.fetchone()
+    is_admin = admin_row[0] if admin_row else False
+    
+    if is_admin:
+        # Master Admin overrides user filters and sees ALL network transactions
+        cur.execute("SELECT username, amount, tx_type, description, created_at FROM wallet_transactions ORDER BY id DESC LIMIT 200")
+        # Prefix the description with the operator's handle for global visibility
+        history = [{'amount': r[1], 'type': r[2], 'description': f"[@{r[0]}] {r[3]}", 'date': r[4].isoformat()} for r in cur.fetchall()]
+    else:
+        # Standard Operator view
+        cur.execute("SELECT amount, tx_type, description, created_at FROM wallet_transactions WHERE username = %s ORDER BY id DESC LIMIT 50", (session['username'],))
+        history = [{'amount': r[0], 'type': r[1], 'description': r[2], 'date': r[3].isoformat()} for r in cur.fetchall()]
+        
+    conn.close()
+    return jsonify(history)
 # --- WEB PUSH SUBSCRIPTIONS ---
 
 @app.route('/api/push/subscribe', methods=['POST'])

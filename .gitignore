@@ -14,5 +14,9 @@ __pycache__/
 # User Uploads (so you don't overwrite live avatars when pushing code)
 static/uploads/
 
+# Local Utilities & Logs
+run-scripts/
+stripe.log
+
 *.db
 .DS_Store
