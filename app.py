@@ -46,10 +46,9 @@ CORS(app)
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["500 per day", "100 per hour"],
+    default_limits=["10000 per day", "2000 per hour"],
     storage_uri="memory://"
 )
-
 # --- SECURITY HEADERS ---
 @app.after_request
 def add_security_headers(response):
@@ -1966,16 +1965,25 @@ def admin_cashouts():
 
     if request.method == 'POST':
         req_id = request.json.get('id')
+        
+        # Fetch the amount of coins locked in the request
+        cur.execute("SELECT amount_coins FROM cashout_requests WHERE id = %s", (req_id,))
+        req_data = cur.fetchone()
+        
+        if req_data:
+            amount_to_recover = req_data[0]
+            
+            # Route the coins back to the Master Admin's Central Bank vault
+            cur.execute("UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE username = %s", (amount_to_recover, session['username']))
+            
+            # Log the recovery in the immutable ledger
+            cur.execute("INSERT INTO wallet_transactions (username, amount, tx_type, description) VALUES (%s, %s, 'deposit', %s)", (session['username'], amount_to_recover, f"Central Bank Recovery (Cashout #{req_id})"))
+
+        # Mark the request as paid
         cur.execute("UPDATE cashout_requests SET status = 'paid' WHERE id = %s", (req_id,))
         conn.commit()
         conn.close()
         return jsonify({'status': 'success'})
-
-    cur.execute("SELECT id, username, amount_coins, payout_method, payout_address, status, created_at FROM cashout_requests ORDER BY id DESC")
-    requests_list = [{'id': r[0], 'username': r[1], 'amount_coins': r[2], 'payout_method': r[3], 'payout_address': r[4], 'status': r[5], 'created_at': r[6]} for r in cur.fetchall()]
-    conn.close()
-    return jsonify(requests_list)
-
 # --- BLACK MARKET COMMERCE ---
 
 @app.route('/api/market/list', methods=['POST'])
