@@ -202,7 +202,9 @@ def init_db():
         ("display_name", "VARCHAR(50)"),
         ("reputation_score", "INTEGER DEFAULT 0"),
         ("is_admin", "BOOLEAN DEFAULT FALSE"),
-        ("wallet_balance", "INTEGER DEFAULT 0")
+        ("wallet_balance", "INTEGER DEFAULT 0"),   # <--- ADDED COMMA HERE
+        ("default_payout_method", "VARCHAR(50)"),  
+        ("default_payout_address", "TEXT")         
     ]
     
     for col_name, col_type in new_columns:
@@ -1137,6 +1139,10 @@ def api_profile(username):
         if 'email' in data:
             val = data['email'].strip() if data['email'] else None
             cur.execute("UPDATE users SET email = %s WHERE username = %s", (val, username))
+        if 'payout_method' in data:
+            cur.execute("UPDATE users SET default_payout_method = %s WHERE username = %s", (data['payout_method'], username))
+        if 'payout_address' in data:
+            cur.execute("UPDATE users SET default_payout_address = %s WHERE username = %s", (data['payout_address'], username))
             
         conn.commit()
         conn.close()
@@ -1144,7 +1150,7 @@ def api_profile(username):
 
     # Fetch user data alongside reputation calculations
     cur.execute("""
-        SELECT u.username, u.display_name, u.bio, u.profile_pic, u.ln_wallet_id, u.stripe_account, i.creator, u.is_pro, u.is_admin, u.email
+        SELECT u.username, u.display_name, u.bio, u.profile_pic, u.ln_wallet_id, u.stripe_account, i.creator, u.is_pro, u.is_admin, u.email, u.default_payout_method, u.default_payout_address
         FROM users u
         LEFT JOIN invite_keys i ON i.used_by = u.username
         WHERE u.username = %s
@@ -1171,6 +1177,8 @@ def api_profile(username):
             'is_pro': user[7],
             'is_admin': user[8],
             'email': user[9] or "",
+            'payout_method': user[10] or "",
+            'payout_address': user[11] or "",
             'street_cred': cred,
             'my_vote': my_vote
         })

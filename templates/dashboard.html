@@ -738,6 +738,23 @@
                 <textarea id="settingBio" class="proto-input" rows="3" placeholder="Who are you?" style="margin-bottom: 0;"></textarea>
             </div>
 
+            <div style="margin-bottom: 15px;">
+                <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Default Cashout Method</label>
+                <select id="settingPayoutMethod" class="proto-input" style="margin-bottom: 0;">
+                    <option value="">Select Platform...</option>
+                    <option value="CashApp">CashApp</option>
+                    <option value="Venmo">Venmo</option>
+                    <option value="Chime">Chime</option>
+                    <option value="PayPal">PayPal</option>
+                    <option value="Zelle">Zelle</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Cashout Tag / Email</label>
+                <input type="text" id="settingPayoutAddress" class="proto-input" placeholder="$cashtag, @venmo, or email" style="margin-bottom: 0;">
+            </div>
+
             <button class="btn-core" style="width: 100%; margin-top: 10px;" onclick="saveNodeConfiguration()">SAVE CONFIGURATION</button>
         </div>
     </div>
@@ -2064,14 +2081,23 @@
         }
 
         async function requestCashOut() {
-            const amountStr = await customPrompt("Enter amount of StreetCoins to Cash Out (Min 1,000 / $10):", "1000", "CASHOUT");
-            if (!amountStr || isNaN(amountStr) || parseInt(amountStr) < 1000) return customAlert("Minimum cashout is 1,000 Coins.", "ERROR");
-            const method = await customPrompt("Enter payout method (e.g., CashApp, Zelle):", "CashApp", "PAYOUT METHOD");
-            if (!method) return;
-            const address = await customPrompt("Enter your " + method + " tag or email:", "$cashtag", "PAYOUT DESTINATION");
-            if (!address) return;
+            const res = await fetch('/api/profile/' + currentUser);
+            const profile = await res.json();
+            
+            if (!profile.payout_method || !profile.payout_address) {
+                customAlert("You must configure a Default Cashout Method and Tag in your Node Configuration before requesting a cashout.", "ACTION REQUIRED");
+                openModal('nodeConfigModal');
+                return;
+            }
 
-            fetch('/api/wallet/cashout', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ amount_coins: parseInt(amountStr), payout_method: method, payout_address: address }) })
+            const amountStr = await customPrompt(`Enter StreetCoins to Cash Out to ${profile.payout_method} (${profile.payout_address}):\n\n(Min 1,000 Coins / $10)`, "1000", "CASHOUT");
+            if (!amountStr || isNaN(amountStr) || parseInt(amountStr) < 1000) return customAlert("Minimum cashout is 1,000 Coins.", "ERROR");
+
+            fetch('/api/wallet/cashout', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ amount_coins: parseInt(amountStr), payout_method: profile.payout_method, payout_address: profile.payout_address }) 
+            })
             .then(res => res.json()).then(data => {
                 if (data.error) customAlert(data.error, "CASHOUT REFUSED");
                 else { customAlert("Requested cashout of " + amountStr + " Coins.", "REQUEST SENT"); refreshLiveVaultBalance(); }
@@ -2222,6 +2248,8 @@
                     document.getElementById('settingDisplayName').value = data.display_name === currentUser ? "" : data.display_name;
                     document.getElementById('settingEmail').value = data.email || "";
                     document.getElementById('settingBio').value = data.bio || "";
+                    document.getElementById('settingPayoutMethod').value = data.payout_method || "";
+                    document.getElementById('settingPayoutAddress').value = data.payout_address || "";
                     if(data.profile_pic) {
                         document.getElementById('configAvatarPreview').src = data.profile_pic;
                         const mobNavPic = document.getElementById('mob-nav-profilePanel');
@@ -2235,8 +2263,14 @@
             const display_name = document.getElementById('settingDisplayName').value.trim();
             const email = document.getElementById('settingEmail').value.trim();
             const bio = document.getElementById('settingBio').value.trim();
+            const payout_method = document.getElementById('settingPayoutMethod').value;
+            const payout_address = document.getElementById('settingPayoutAddress').value.trim();
             
-            const res = await fetch('/api/profile/' + currentUser, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ display_name, email, bio }) });
+            const res = await fetch('/api/profile/' + currentUser, { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ display_name, email, bio, payout_method, payout_address }) 
+            });
             if (res.ok) { customAlert("Node Configuration securely updated.", "SUCCESS"); closeModal('nodeConfigModal'); loadNetworkUsers(); } 
             else { customAlert("Failed to update Node Configuration.", "ERROR"); }
         }
