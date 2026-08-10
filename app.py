@@ -1984,6 +1984,12 @@ def admin_cashouts():
         conn.commit()
         conn.close()
         return jsonify({'status': 'success'})
+
+    # --- THE MISSING GET LOGIC ---
+    cur.execute("SELECT id, username, amount_coins, payout_method, payout_address, status, created_at FROM cashout_requests ORDER BY id DESC")
+    requests_list = [{'id': r[0], 'username': r[1], 'amount_coins': r[2], 'payout_method': r[3], 'payout_address': r[4], 'status': r[5], 'created_at': r[6]} for r in cur.fetchall()]
+    conn.close()
+    return jsonify(requests_list)
 # --- BLACK MARKET COMMERCE ---
 
 @app.route('/api/market/list', methods=['POST'])
