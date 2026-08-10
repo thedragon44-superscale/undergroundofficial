@@ -201,7 +201,7 @@
         .modal-close:hover { color: white; }
 
         /* Custom Promise Dialogs (From original architecture) */
-        .custom-dialog-overlay { display: none; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(8px); }
+        .custom-dialog-overlay { display: none; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.85); z-index: 10500; justify-content: center; align-items: center; backdrop-filter: blur(8px); }
         .custom-dialog-box { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 16px; padding: 25px; width: 90%; max-width: 350px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }
         .custom-dialog-title { color: var(--accent); font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
         .custom-dialog-body { color: var(--text-main); font-size: 0.95rem; line-height: 1.6; margin-bottom: 25px; white-space: pre-wrap; word-wrap: break-word; }
@@ -862,7 +862,9 @@
         const isFirstLogin = {{ 'true' if show_welcome else 'false' }};
         const DEFAULT_AVATAR_CDN = "/static/default.png";
         
-        const wsHost = 'wss://chat.streetcode101.com';
+        // Dynamically lock the WebSocket to the node's current active IP/Domain
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsHost = wsProtocol + window.location.hostname + ':5001';
         let socket = null; 
         
         let decryptedHistory = [];
@@ -907,12 +909,14 @@
                 const overlayEl = document.getElementById('customDialogOverlay');
                 const inputWrapEl = document.getElementById('customDialogInputWrapper');
                 const inputField = document.getElementById('customDialogInputField');
+                const suggestionMenu = document.getElementById('customDialogSuggestionMenu');
                 const cancelBtn = document.getElementById('customDialogCancelBtn');
                 const confirmBtn = document.getElementById('customDialogConfirmBtn');
 
                 if (titleEl) titleEl.innerText = '[' + title + ']';
                 if (bodyEl) bodyEl.innerText = message;
                 if (inputField) { inputField.value = ""; inputField.placeholder = placeholder; }
+                if (suggestionMenu) { suggestionMenu.innerHTML = ""; suggestionMenu.style.display = "none"; }
                 if (inputWrapEl) inputWrapEl.style.display = "flex";
                 
                 if (cancelBtn) {
@@ -1375,9 +1379,9 @@
             } else if(text.startsWith("[ESCROW_INVOICE:")) {
                 const segments = text.replace("[ESCROW_INVOICE:", "").replace("]", "").split(",");
                 if (isMe) {
-                    contentHTML = `<div style="text-align:center;">💸 Locked Funds in Escrow<h3 style="margin:5px 0;">${segments[1]} Coins</h3></div>`;
+                    contentHTML = `<div style="text-align:center;">💸 Locked Funds in Escrow<h3 style="margin:5px 0;">${segments[1]} Coins</h3><small style="opacity:0.8;">Release from Terminal when ready.</small></div>`;
                 } else {
-                    contentHTML = `<div style="text-align:center;">📩 Received Escrow Lock<h3 style="margin:5px 0;">${segments[1]} Coins</h3><small style="opacity:0.8;">Check Terminal to release.</small></div>`;
+                    contentHTML = `<div style="text-align:center;">📩 Received Escrow Lock<h3 style="margin:5px 0;">${segments[1]} Coins</h3><small style="opacity:0.8;">Awaiting sender to release.</small></div>`;
                 }
             } else {
                 contentHTML = parseMentions(text);
@@ -1460,8 +1464,10 @@
         async function mountGroupChatChannel(group) {
             activeRecipient = ""; activeGroupId = group.id; activeGroupObject = group;
             
-            document.getElementById('msg-inbox').classList.remove('active');
-            document.getElementById('msg-thread').classList.add('active');
+            const inboxView = document.getElementById('msg-inbox');
+            const threadView = document.getElementById('msg-thread');
+            if (inboxView) { inboxView.classList.remove('active'); inboxView.style.display = 'none'; }
+            if (threadView) { threadView.classList.add('active'); threadView.style.display = 'block'; }
             
             document.getElementById('chatTargetText').innerText = `${group.name}`;
             document.getElementById('target_group_id').value = group.id;
@@ -2239,9 +2245,13 @@
         }
 
         async function markCashoutPaid(reqId) {
+            closeModal('terminalModal'); // Explicitly close the Terminal to clear the screen
             const confirmation = await customPrompt("Type 'PAID' to verify you have sent the real-world fiat money to this operator:", "PAID", "CONFIRM CASHOUT");
             if (confirmation !== "PAID") return;
-            fetch('/api/admin/cashouts', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: reqId }) }).then(() => loadAdminCashouts());
+            fetch('/api/admin/cashouts', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: reqId }) })
+            .then(() => {
+                customAlert("Cashout marked as PAID. StreetCoins successfully recovered to the Central Bank.", "SUCCESS");
+            });
         }
 
         // --- MISC UTILS (Notifications, Search, Parsing) ---
@@ -2545,6 +2555,53 @@
                     renderInboxList(); 
                 });
         }
+
+// --- GLOBAL USER AUTOCOMPLETE ENGINE ---
+        function initUserSearchAutocomplete(inputId, menuId) {
+            const input = document.getElementById(inputId);
+            const menu = document.getElementById(menuId);
+            if (!input || !menu) return;
+
+            input.addEventListener('input', () => {
+                const query = input.value.replace('@', '').trim().toLowerCase();
+                if (!query) {
+                    menu.style.display = 'none';
+                    menu.innerHTML = '';
+                    return;
+                }
+
+                // Search directory excluding current user
+                const matches = networkUsersDirectory.filter(u => 
+                    u.username !== currentUser && (
+                        u.username.toLowerCase().includes(query) || 
+                        (u.display_name && u.display_name.toLowerCase().includes(query))
+                    )
+                );
+
+                if (matches.length > 0) {
+                    menu.innerHTML = matches.map(u => `
+                        <div class="ac-item" onclick="
+                            document.getElementById('${inputId}').value = '${u.username}';
+                            document.getElementById('${menuId}').style.display = 'none';
+                        ">
+                            <img src="${u.profile_pic || DEFAULT_AVATAR_CDN}">
+                            <span>${u.display_name || u.username} <small style="color:var(--text-muted);">@${u.username}</small></span>
+                        </div>
+                    `).join('');
+                    menu.style.display = 'block';
+                } else {
+                    menu.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (e.target !== input && !menu.contains(e.target)) menu.style.display = 'none';
+            });
+        }
+
+        // Initialize autocomplete on Direct Transfer prompts & Add Member modal
+        initUserSearchAutocomplete('customDialogInputField', 'customDialogSuggestionMenu');
+        initUserSearchAutocomplete('addMemberInput', 'addMemberSuggestionMenu');
 
         // --- BOOT SEQUENCE ---
         document.addEventListener('DOMContentLoaded', async function() {
