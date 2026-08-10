@@ -913,8 +913,7 @@
         const isFirstLogin = {{ 'true' if show_welcome else 'false' }};
         const DEFAULT_AVATAR_CDN = "/static/default.png";
         
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const wsHost = wsProtocol + window.location.hostname + (window.location.port ? ':' + window.location.port : '');
+        const wsHost = 'wss://chat.streetcode101.com';
         let socket = null; 
         
         let decryptedHistory = [];
@@ -1738,7 +1737,7 @@
                         </div>
                         <div style="padding: 0 15px; margin-bottom: 10px;">${getCredBadgeHTML(p.street_cred)}</div>
                         
-                        ${p.image_url ? `<img src="${p.image_url}" class="post-image" onclick="launchLightboxModal(this.src)">` : ""}
+                        ${p.image_url ? `<img src="${p.image_url.replace('http://192.168.1.208:9000', 'https://s3.streetcode101.com')}" class="post-image" onclick="launchLightboxModal(this.src)">` : ""}
                         
                         <div class="post-details" style="padding-top:10px;">
                             <div class="post-body" style="margin-bottom:15px;">${parseMentions(p.content)}</div>
@@ -1871,7 +1870,7 @@
                                 <span class="post-user" onclick="openProfile('${p.username}')">@${p.username}</span>
                             </div>
                         </div>
-                        ${p.image_url ? `<img src="${p.image_url}" class="post-image" onclick="launchLightboxModal(this.src)">` : ""}
+                        ${p.image_url ? `<img src="${p.image_url.replace('http://192.168.1.208:9000', 'https://s3.streetcode101.com')}" class="post-image" onclick="launchLightboxModal(this.src)">` : ""}
                         <div class="post-details" style="padding-top:10px;">
                             <div class="post-body" style="margin-bottom:15px;">${parseMentions(p.content)}</div>
                         </div>
@@ -1905,7 +1904,7 @@
                 header.style.display = 'block'; container.style.display = 'flex'; container.innerHTML = '';
                 
                 items.forEach(item => {
-                    let imageHTML = item.image_url ? `<img src="${item.image_url}" style="width:100px; height:100px; object-fit:contain; background:#000; border-radius:8px; border:1px solid var(--border);" onclick="launchLightboxModal(this.src)">` : `<div style="width:100px; height:100px; background:rgba(0,0,0,0.3); border-radius:8px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); border:1px dashed var(--border);">NO IMG</div>`;
+                    let imageHTML = item.image_url ? `<img src="${item.image_url.replace('http://192.168.1.208:9000', 'https://s3.streetcode101.com')}" style="width:100px; height:100px; object-fit:contain; background:#000; border-radius:8px; border:1px solid var(--border);" onclick="launchLightboxModal(this.src)">` : `<div style="width:100px; height:100px; background:rgba(0,0,0,0.3); border-radius:8px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); border:1px dashed var(--border);">NO IMG</div>`;
                     let buyBtn = item.seller === currentUser ? `<button class="btn-core" style="width:100%; opacity:0.5;" disabled>Your Listing</button>` : `<button class="btn-core" style="width:100%;" onclick="purchaseMarketItem(${item.id}, '${item.title.replace(/'/g, "\\'")}', ${item.price_coins}, '${item.seller}')">BUY (${item.price_coins} C)</button>`;
                         
                     container.innerHTML += `
@@ -1956,7 +1955,7 @@
                 items.forEach(item => {
                     let sellerMatch = networkUsersDirectory.find(u => u.username === item.seller);
                     let sellerAvatar = sellerMatch ? (sellerMatch.profile_pic || DEFAULT_AVATAR_CDN) : DEFAULT_AVATAR_CDN;
-                    let imageHTML = item.image_url ? `<img src="${item.image_url}" style="width:100%; height:180px; object-fit:contain; background:#000; border-radius:8px; border:1px solid var(--border);" onclick="launchLightboxModal(this.src)">` : ``;
+                    let imageHTML = item.image_url ? `<img src="${item.image_url.replace('http://192.168.1.208:9000', 'https://s3.streetcode101.com')}" style="width:100%; height:180px; object-fit:contain; background:#000; border-radius:8px; border:1px solid var(--border);" onclick="launchLightboxModal(this.src)">` : ``;
                     let buyBtn = item.seller === currentUser ? `<button class="btn-core" disabled>Your Listing</button>` : `<button class="btn-core" onclick="purchaseMarketItem(${item.id}, '${item.title.replace(/'/g, "\\'")}', ${item.price_coins}, '${item.seller}')">BUY (${item.price_coins} C)</button>`;
                         
                     container.innerHTML += `
