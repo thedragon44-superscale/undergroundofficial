@@ -609,25 +609,6 @@
             </div>
         </div>
     </div>
-
-    <!-- 3. Support Desk Modal -->
-    <div class="modal-overlay" id="supportModal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <i class="fa-solid fa-arrow-left" style="cursor: pointer; color: var(--text-muted); font-size: 1.2rem;" onclick="closeModal('supportModal'); openModal('terminalModal')"></i>
-                    <h3><i class="fa-solid fa-headset"></i> Support Desk</h3>
-                </div>
-                <i class="fa-solid fa-xmark modal-close" onclick="closeModal('supportModal')"></i>
-            </div>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Direct line to Central Administration.</p>
-            <form id="supportTicketForm" onsubmit="submitSupportTicket(event)">
-                <input type="email" id="supportEmail" class="proto-input" placeholder="Reply-To Email Address" required autocomplete="off">
-                <textarea id="supportMessage" class="proto-input" rows="5" placeholder="Describe the vault dispute or technical fault..." required></textarea>
-                <button type="submit" id="supportSubmitBtn" class="btn-core" style="width: 100%;">SUBMIT TICKET</button>
-            </form>
-        </div>
-    </div>
     
     <!-- 4. Create Group Workspace Modal -->
     <div class="modal-overlay" id="createGroupModal">
@@ -703,159 +684,6 @@
         </div>
     </div>
 
-    <!-- 7. Node Configuration Modal -->
-    <div class="modal-overlay" id="nodeConfigModal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <i class="fa-solid fa-arrow-left" style="cursor: pointer; color: var(--text-muted); font-size: 1.2rem;" onclick="closeModal('nodeConfigModal'); openModal('terminalModal')"></i>
-                    <h3><i class="fa-solid fa-sliders"></i> Node Config</h3>
-                </div>
-                <i class="fa-solid fa-xmark modal-close" onclick="closeModal('nodeConfigModal')"></i>
-            </div>
-            
-            <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
-                <img src="/static/default.png" id="configAvatarPreview" style="width: 55px; height: 55px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover;">
-                <div style="flex: 1;">
-                    <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Operator Avatar</label>
-                    <input type="file" id="settingAvatarUpload" accept="image/*" style="display:none;" onchange="uploadSettingsAvatar()">
-                    <button class="btn-core" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: var(--text-main); width: 100%; font-size: 0.75rem;" onclick="document.getElementById('settingAvatarUpload').click()"><i class="fa-solid fa-upload"></i> UPLOAD IMAGE</button>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Display Alias</label>
-                <input type="text" id="settingDisplayName" class="proto-input" placeholder="Operator Alias" style="margin-bottom: 0;">
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Recovery Email (Optional)</label>
-                <input type="email" id="settingEmail" class="proto-input" placeholder="admin@domain.com" style="margin-bottom: 0;">
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Bio / Manifesto</label>
-                <textarea id="settingBio" class="proto-input" rows="3" placeholder="Who are you?" style="margin-bottom: 0;"></textarea>
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Default Cashout Method</label>
-                <select id="settingPayoutMethod" class="proto-input" style="margin-bottom: 0;">
-                    <option value="">Select Platform...</option>
-                    <option value="CashApp">CashApp</option>
-                    <option value="Venmo">Venmo</option>
-                    <option value="Chime">Chime</option>
-                    <option value="PayPal">PayPal</option>
-                    <option value="Zelle">Zelle</option>
-                </select>
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Cashout Tag / Email</label>
-                <input type="text" id="settingPayoutAddress" class="proto-input" placeholder="$cashtag, @venmo, or email" style="margin-bottom: 0;">
-            </div>
-
-            <button class="btn-core" style="width: 100%; margin-top: 10px;" onclick="saveNodeConfiguration()">SAVE CONFIGURATION</button>
-        </div>
-    </div>
-
-    <!-- 8. Terms & AUP Modal (Fully Expandable Legal text) -->
-    <div class="modal-overlay" id="termsModal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <i class="fa-solid fa-arrow-left" style="cursor: pointer; color: var(--text-muted); font-size: 1.2rem;" onclick="closeModal('termsModal'); openModal('terminalModal')"></i>
-                    <h3><i class="fa-solid fa-file-contract"></i> Terms of Service</h3>
-                </div>
-                <i class="fa-solid fa-xmark modal-close" onclick="closeModal('termsModal')"></i>
-            </div>
-            
-            <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; padding-right: 5px;">
-                <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0;"><i>Effective Date: August 2026</i></p>
-                
-                <h4 style="color: var(--text-main); margin-bottom: 5px;">1. Cryptographic Architecture</h4>
-                <p style="margin-top: 0;">Street Code 101 operates on a client-side, Zero-Knowledge End-to-End Encryption (E2EE) protocol. Private Direct Messages (DMs) and Gang Chat transmissions are encrypted on the user's local device prior to network routing.</p>
-                <ul style="padding-left: 20px; margin-top: 0;">
-                    <li><strong>No Server Inspection:</strong> The Platform operator does not possess, store, or maintain central private keys.</li>
-                    <li><strong>User Liability:</strong> Users assume 100% legal liability for all text, files, images, or code transmitted via encrypted channels.</li>
-                </ul>
-
-                <h4 style="color: var(--text-main); margin-bottom: 5px; margin-top: 15px;">2. Key Stewardship</h4>
-                <p style="margin-top: 0;">Users are solely responsible for maintaining their Vault Passphrase and physical 16-character Recovery Key. Lost passphrases cannot be reset by administration.</p>
-
-                <h4 style="color: var(--text-main); margin-bottom: 5px; margin-top: 15px;">3. StreetCoins & Treasury</h4>
-                <p style="margin-top: 0;">StreetCoins are internal platform utility tokens. Fiat deposits via third-party gateways (Stripe) are subject to a non-refundable network processing fee of 6% + $0.30 USD.</p>
-
-                <h4 style="color: var(--text-main); margin-bottom: 5px; margin-top: 15px;">4. Black Market & Smart Escrow</h4>
-                <p style="margin-top: 0;">The Platform acts solely as a neutral software venue and escrow holder. Escrow disbursals algorithmically deduct a 5% platform treasury fee.</p>
-
-                <h4 style="color: var(--text-main); margin-bottom: 5px; margin-top: 15px;">5. Acceptable Use Policy (AUP)</h4>
-                <p style="margin-top: 0;">Public areas (Global Feed, User Profiles, Market Listings) strictly prohibit CSAM, physical violence threats, or malicious software distribution.</p>
-            </div>
-            
-            <button class="btn-core" style="width: 100%; margin-top: 20px; background: rgba(0,0,0,0.5); border: 1px solid var(--border);" onclick="closeModal('termsModal')">ACKNOWLEDGE TERMS</button>
-        </div>
-    </div>
-
-    <!-- 9. Quick Start Guide Modal -->
-    <div class="modal-overlay" id="quickStartModal">
-        <div class="modal-box" style="max-width: 500px;">
-            <div class="modal-header">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <i class="fa-solid fa-arrow-left" style="cursor: pointer; color: var(--text-muted); font-size: 1.2rem;" onclick="closeModal('quickStartModal'); openModal('terminalModal')"></i>
-                    <h3><i class="fa-solid fa-book-journal-whills"></i> Network Manual</h3>
-                </div>
-                <i class="fa-solid fa-xmark modal-close" onclick="closeModal('quickStartModal')"></i>
-            </div>
-            
-            <div style="margin-bottom: 25px;">
-                <div class="guide-step">
-                    <div class="guide-icon"><i class="fa-solid fa-compass"></i></div>
-                    <div class="guide-text">
-                        <h4>1. Interface Navigation</h4>
-                        <p>Welcome to the node. You have access to four primary sectors:</p>
-                        <ul>
-                            <li><strong>Network Feed:</strong> The global intelligence broadcast channel.</li>
-                            <li><strong>Black Market:</strong> The peer-to-peer commerce center.</li>
-                            <li><strong>E2EE Comms:</strong> Your private encrypted direct messages and group workspaces.</li>
-                            <li><strong>Capital Vault:</strong> The financial ledger for tracking your StreetCoins.</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div class="guide-step">
-                    <div class="guide-icon"><i class="fa-solid fa-shield-halved"></i></div>
-                    <div class="guide-text">
-                        <h4>2. Secure Communications</h4>
-                        <p>All direct messages and workspaces utilize Zero-Knowledge E2EE. <strong>If you lose your passphrase and recovery key, your historical chat data is permanently unrecoverable.</strong></p>
-                    </div>
-                </div>
-                
-                <div class="guide-step">
-                    <div class="guide-icon"><i class="fa-solid fa-coins"></i></div>
-                    <div class="guide-text">
-                        <h4>3. The Sovereign Economy & Escrow</h4>
-                        <p><strong>StreetCoins</strong> power the network. Use the Capital Vault to process fiat deposits (via Stripe). When trading on the Black Market, <strong>never send coins directly.</strong> Always use the Smart Escrow system.</p>
-                    </div>
-                </div>
-
-                <div class="guide-step" style="margin-bottom: 0;">
-                    <div class="guide-icon"><i class="fa-solid fa-star"></i></div>
-                    <div class="guide-text">
-                        <h4>4. The Street Cred System</h4>
-                        <p>Your reputation is permanently attached to your Operator Handle.</p>
-                        <ul>
-                            <li><strong>Square Business 🤝:</strong> Completing clean escrow deals and posting high-value intel earns positive votes.</li>
-                            <li><strong>Rat Status 🐀:</strong> Scammers and operators who fail to honor escrow will receive negative votes and be flagged.</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <button class="btn-core" style="width: 100%;" onclick="closeModal('quickStartModal')">INITIALIZE</button>
-        </div>
-    </div>
-
     <!-- 10. Command Terminal Modal -->
     <div class="modal-overlay" id="terminalModal">
         <div class="modal-box">
@@ -901,10 +729,114 @@
                 </form>
                 {% endif %}
                 
-                <button class="term-btn" onclick="closeModal('terminalModal'); openModal('supportModal')"><i class="fa-solid fa-headset"></i> [04] SUPPORT DESK</button>
-                <button class="term-btn" onclick="closeModal('terminalModal'); openModal('termsModal')"><i class="fa-solid fa-file-contract"></i> [05] TERMS & AUP</button>
-                <button class="term-btn" onclick="closeModal('terminalModal'); openModal('nodeConfigModal')"><i class="fa-solid fa-sliders"></i> [06] NODE CONFIGURATION</button>
-                <button class="term-btn" onclick="closeModal('terminalModal'); openModal('quickStartModal')"><i class="fa-solid fa-book-journal-whills"></i> [07] QUICK START GUIDE</button>
+                <!-- Support Desk Accordion -->
+                <details id="supportAccordion" style="background:rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;">
+                    <summary class="term-btn" style="border: none; margin-bottom: 0; background: transparent;"><i class="fa-solid fa-headset"></i> [04] SUPPORT DESK</summary>
+                    <div style="padding: 15px; border-top: 1px solid var(--border); cursor: default;" onclick="event.stopPropagation()">
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0;">Direct line to Central Administration.</p>
+                        <form id="supportTicketForm" onsubmit="submitSupportTicket(event)">
+                            <input type="email" id="supportEmail" class="proto-input" placeholder="Reply-To Email Address" required autocomplete="off">
+                            <textarea id="supportMessage" class="proto-input" rows="4" placeholder="Describe the issue..." required></textarea>
+                            <button type="submit" id="supportSubmitBtn" class="btn-core" style="width: 100%;">SUBMIT TICKET</button>
+                        </form>
+                    </div>
+                </details>
+
+                <!-- Terms & AUP Accordion -->
+                <details style="background:rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;">
+                    <summary class="term-btn" style="border: none; margin-bottom: 0; background: transparent;"><i class="fa-solid fa-file-contract"></i> [05] TERMS & AUP</summary>
+                    <div style="padding: 15px; border-top: 1px solid var(--border); cursor: default; max-height: 300px; overflow-y: auto;" onclick="event.stopPropagation()">
+                        <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0;"><i>Effective Date: August 2026</i></p>
+                        <h4 style="color: var(--text-main); margin-bottom: 5px; font-size: 0.9rem;">1. Cryptographic Architecture</h4>
+                        <p style="margin-top: 0; font-size: 0.8rem; color: var(--text-muted);">Street Code 101 operates on a client-side, Zero-Knowledge End-to-End Encryption (E2EE) protocol. Private Direct Messages (DMs) and Gang Chat transmissions are encrypted on the user's local device prior to network routing.</p>
+                        <h4 style="color: var(--text-main); margin-bottom: 5px; margin-top: 15px; font-size: 0.9rem;">2. Key Stewardship</h4>
+                        <p style="margin-top: 0; font-size: 0.8rem; color: var(--text-muted);">Users are solely responsible for maintaining their Vault Passphrase and physical 16-character Recovery Key.</p>
+                        <h4 style="color: var(--text-main); margin-bottom: 5px; margin-top: 15px; font-size: 0.9rem;">3. StreetCoins & Treasury</h4>
+                        <p style="margin-top: 0; font-size: 0.8rem; color: var(--text-muted);">StreetCoins are internal platform utility tokens. Fiat deposits via third-party gateways (Stripe) are subject to a non-refundable network processing fee of 6% + $0.30 USD.</p>
+                        <h4 style="color: var(--text-main); margin-bottom: 5px; margin-top: 15px; font-size: 0.9rem;">4. Black Market & Smart Escrow</h4>
+                        <p style="margin-top: 0; font-size: 0.8rem; color: var(--text-muted);">The Platform acts solely as a neutral software venue and escrow holder. Escrow disbursals algorithmically deduct a 5% platform treasury fee.</p>
+                        <h4 style="color: var(--text-main); margin-bottom: 5px; margin-top: 15px; font-size: 0.9rem;">5. Acceptable Use Policy (AUP)</h4>
+                        <p style="margin-top: 0; font-size: 0.8rem; color: var(--text-muted);">Public areas (Global Feed, User Profiles, Market Listings) strictly prohibit CSAM, physical violence threats, or malicious software distribution.</p>
+                    </div>
+                </details>
+
+                <!-- Node Configuration Accordion -->
+                <details id="nodeConfigAccordion" style="background:rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;">
+                    <summary class="term-btn" style="border: none; margin-bottom: 0; background: transparent;"><i class="fa-solid fa-sliders"></i> [06] NODE CONFIGURATION</summary>
+                    <div style="padding: 15px; border-top: 1px solid var(--border); cursor: default;" onclick="event.stopPropagation()">
+                        <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+                            <img src="/static/default.png" id="configAvatarPreview" style="width: 55px; height: 55px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover;">
+                            <div style="flex: 1;">
+                                <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Operator Avatar</label>
+                                <input type="file" id="settingAvatarUpload" accept="image/*" style="display:none;" onchange="uploadSettingsAvatar()">
+                                <button class="btn-core" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: var(--text-main); width: 100%; font-size: 0.75rem;" onclick="document.getElementById('settingAvatarUpload').click()"><i class="fa-solid fa-upload"></i> UPLOAD IMAGE</button>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Display Alias</label>
+                            <input type="text" id="settingDisplayName" class="proto-input" placeholder="Operator Alias" style="margin-bottom: 0;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Recovery Email</label>
+                            <input type="email" id="settingEmail" class="proto-input" placeholder="admin@domain.com" style="margin-bottom: 0;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Bio / Manifesto</label>
+                            <textarea id="settingBio" class="proto-input" rows="2" placeholder="Who are you?" style="margin-bottom: 0;"></textarea>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Default Cashout Method</label>
+                            <select id="settingPayoutMethod" class="proto-input" style="margin-bottom: 0;">
+                                <option value="">Select Platform...</option>
+                                <option value="CashApp">CashApp</option>
+                                <option value="Venmo">Venmo</option>
+                                <option value="Chime">Chime</option>
+                                <option value="PayPal">PayPal</option>
+                                <option value="Zelle">Zelle</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; text-transform: uppercase;">Cashout Tag / Email</label>
+                            <input type="text" id="settingPayoutAddress" class="proto-input" placeholder="$cashtag, @venmo, or email" style="margin-bottom: 0;">
+                        </div>
+                        <button class="btn-core" style="width: 100%; margin-top: 10px;" onclick="saveNodeConfiguration()">SAVE CONFIGURATION</button>
+                    </div>
+                </details>
+
+                <!-- Quick Start Guide Accordion -->
+                <details style="background:rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;">
+                    <summary class="term-btn" style="border: none; margin-bottom: 0; background: transparent;"><i class="fa-solid fa-book-journal-whills"></i> [07] QUICK START GUIDE</summary>
+                    <div style="padding: 15px; border-top: 1px solid var(--border); cursor: default; max-height: 300px; overflow-y: auto;" onclick="event.stopPropagation()">
+                        <div class="guide-step" style="margin-bottom: 15px;">
+                            <div class="guide-icon" style="width:30px; height:30px; font-size:0.9rem;"><i class="fa-solid fa-compass"></i></div>
+                            <div class="guide-text">
+                                <h4 style="margin-bottom:2px;">1. Interface Navigation</h4>
+                                <p style="font-size:0.75rem;">Access the Network Feed, Black Market, E2EE Comms, and Capital Vault.</p>
+                            </div>
+                        </div>
+                        <div class="guide-step" style="margin-bottom: 15px;">
+                            <div class="guide-icon" style="width:30px; height:30px; font-size:0.9rem;"><i class="fa-solid fa-shield-halved"></i></div>
+                            <div class="guide-text">
+                                <h4 style="margin-bottom:2px;">2. Secure Communications</h4>
+                                <p style="font-size:0.75rem;">If you lose your passphrase and recovery key, your chat data is permanently lost.</p>
+                            </div>
+                        </div>
+                        <div class="guide-step" style="margin-bottom: 15px;">
+                            <div class="guide-icon" style="width:30px; height:30px; font-size:0.9rem;"><i class="fa-solid fa-coins"></i></div>
+                            <div class="guide-text">
+                                <h4 style="margin-bottom:2px;">3. The Sovereign Economy</h4>
+                                <p style="font-size:0.75rem;">Never send coins directly for items. Always use the Smart Escrow system.</p>
+                            </div>
+                        </div>
+                        <div class="guide-step" style="margin-bottom: 0;">
+                            <div class="guide-icon" style="width:30px; height:30px; font-size:0.9rem;"><i class="fa-solid fa-star"></i></div>
+                            <div class="guide-text">
+                                <h4 style="margin-bottom:2px;">4. Street Cred System</h4>
+                                <p style="font-size:0.75rem;">Completing clean deals earns positive votes. Scammers get burned and flagged.</p>
+                            </div>
+                        </div>
+                    </div>
+                </details>
                 
                 <!-- Admin Panel (Only visible to Master Admin) -->
                 {% if is_admin %}
@@ -1649,7 +1581,7 @@
             fetch('/api/support/contact', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email: email, message: message }) })
             .then(res => res.json()).then(data => {
                 if (data.error) customAlert(data.error, "ERROR");
-                else { customAlert("Ticket routed to Central Admin.", "SUCCESS"); closeModal('supportModal'); document.getElementById('supportTicketForm').reset(); }
+                else { customAlert("Ticket routed to Central Admin.", "SUCCESS"); document.getElementById('supportAccordion').open = false; document.getElementById('supportTicketForm').reset(); }
             }).finally(() => { btn.innerText = "SUBMIT TICKET"; btn.disabled = false; });
         }
 
@@ -2086,7 +2018,8 @@
             
             if (!profile.payout_method || !profile.payout_address) {
                 customAlert("You must configure a Default Cashout Method and Tag in your Node Configuration before requesting a cashout.", "ACTION REQUIRED");
-                openModal('nodeConfigModal');
+                openModal('terminalModal');
+                document.getElementById('nodeConfigAccordion').open = true;
                 return;
             }
 
@@ -2271,7 +2204,7 @@
                 headers: {'Content-Type': 'application/json'}, 
                 body: JSON.stringify({ display_name, email, bio, payout_method, payout_address }) 
             });
-            if (res.ok) { customAlert("Node Configuration securely updated.", "SUCCESS"); closeModal('nodeConfigModal'); loadNetworkUsers(); } 
+            if (res.ok) { customAlert("Node Configuration securely updated.", "SUCCESS"); document.getElementById('nodeConfigAccordion').open = false; loadNetworkUsers(); } 
             else { customAlert("Failed to update Node Configuration.", "ERROR"); }
         }
 
@@ -2305,8 +2238,9 @@
             });
         }
 
-        function markCashoutPaid(reqId) {
-            if(!confirm("Have you sent the fiat money to this user?")) return;
+        async function markCashoutPaid(reqId) {
+            const confirmation = await customPrompt("Type 'PAID' to verify you have sent the real-world fiat money to this operator:", "PAID", "CONFIRM CASHOUT");
+            if (confirmation !== "PAID") return;
             fetch('/api/admin/cashouts', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: reqId }) }).then(() => loadAdminCashouts());
         }
 
